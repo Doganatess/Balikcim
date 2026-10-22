@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#081426"/>
+      <stop offset="50%" stop-color="#060A0F"/>
+      <stop offset="100%" stop-color="#020508"/>
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  
+  <!-- Outer subtle radar ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#0ea5e9" stroke-opacity="0.15" stroke-width="2"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#0ea5e9" stroke-opacity="0.25" stroke-width="2.5" stroke-dasharray="8 8"/>
+  <circle cx="256" cy="256" r="80" fill="none" stroke="#0ea5e9" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- Wave lines in background -->
+  <path d="M 96 340 Q 176 310, 256 340 T 416 340" fill="none" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 128 370 Q 192 350, 256 370 T 384 370" fill="none" stroke="#0284c7" stroke-opacity="0.25" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Stylized Fish Shape -->
+  <g transform="translate(106, 150)">
+    <!-- Fish body -->
+    <path d="M 230 106 C 180 50, 110 50, 50 106 C 110 162, 180 162, 230 106 Z" fill="url(#cyanGrad)" />
+    <!-- Fish tail -->
+    <path d="M 54 106 L 10 60 C 26 106, 26 106, 10 152 Z" fill="url(#cyanGrad)" />
+    <!-- Fin -->
+    <path d="M 140 76 C 160 52, 180 54, 190 70 Z" fill="#38bdf8" />
+    <path d="M 130 136 C 150 156, 170 154, 180 140 Z" fill="#0284c7" />
+    <!-- Fish eye -->
+    <circle cx="204" cy="98" r="9" fill="#060A0F" />
+    <circle cx="206" cy="96" r="3.5" fill="#ffffff" />
+    <!-- Sonar signal dot from mouth -->
+    <circle cx="254" cy="106" r="6" fill="url(#goldGrad)" />
+    <!-- Sonar pulses -->
+    <path d="M 268 90 A 22 22 0 0 1 268 122" fill="none" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 284 76 A 40 40 0 0 1 284 136" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-opacity="0.8"/>
+  </g>
+
+  <!-- Highlight badge text "BALIK YAKALA" -->
+  <text x="256" y="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="4">BALIK YAKALA</text>
+</svg>

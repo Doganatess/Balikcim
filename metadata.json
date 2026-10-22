@@ -1,0 +1,6 @@
+{
+  "name": "Balık Yakala - Saatlik Balık Avı Tahmini",
+  "description": "Deniz ve içsularda saatlik balık avı tahmini, ideal av sahası haritası, 101 balık türü kataloğu ve av defteri.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
