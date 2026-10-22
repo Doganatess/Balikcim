@@ -36,7 +36,7 @@ export const FishScoresSection: React.FC<FishScoresSectionProps> = ({
             <span className="text-[10px] text-slate-500 font-mono">Örnek Model</span>
           </div>
           <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-            Deniz sıcaklığı ({region.conditions.waterTemp}°C), akıntı ve solunar analizine göre hesaplanan saatlik av olasılıkları
+            Solunar döngüsü ve mevsimsel koşullara dayalı örnek model skorlarıdır (Gerçek avlanma garantisi değildir).
           </p>
         </div>
 
