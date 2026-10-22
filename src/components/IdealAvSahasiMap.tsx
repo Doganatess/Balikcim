@@ -35,6 +35,12 @@ interface IdealAvSahasiMapProps {
   onSelectFish: (fish: FishSpecies) => void;
 }
 
+const getSstTileDate = (): string => {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString().slice(0, 10);
+};
+
 export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   region,
   selectedFish,
@@ -252,7 +258,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
 
-    // Clean up existing SST layer if present
     if (sstTileLayerRef.current) {
       map.removeLayer(sstTileLayerRef.current);
       sstTileLayerRef.current = null;
@@ -268,26 +273,31 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     setSstError(null);
 
     try {
-      // NASA GIBS GHRSST MUR Level 4 Sea Surface Temperature Layer (1km analysis, Daily composite)
-      // WMTS Web Mercator (EPSG:3857) GoogleMapsCompatible_Level7
-      const sstLayer = L.tileLayer(
-        'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png',
-        {
-          maxNativeZoom: 7,
-          maxZoom: 18,
-          opacity: sstOpacity,
-          zIndex: 5, // Positioned above base OSM tiles, but strictly below spot markers (spotsGroup)
-          attribution: '&copy; <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> · GHRSST MUR Deniz Yüzeyi Sıcaklığı (1 km / Günlük Analiz)'
-        }
-      );
+      const tileDate = getSstTileDate();
+      const sstUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/GHRSST_L4_MUR_Sea_Surface_Temperature/default/${tileDate}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
+
+      const sstLayer = L.tileLayer(sstUrl, {
+        maxNativeZoom: 7,
+        maxZoom: 18,
+        opacity: sstOpacity,
+        zIndex: 5,
+        attribution: '&copy; <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> · GHRSST MUR Deniz Yüzeyi Sıcaklığı (1 km / Günlük Analiz)',
+        crossOrigin: true,
+      });
 
       sstLayer.on('load', () => {
         setSstLoading(false);
+        setSstError(null);
+      });
+
+      sstLayer.on('tileload', () => {
+        setSstLoading(false);
+        setSstError(null);
       });
 
       sstLayer.on('tileerror', () => {
         setSstLoading(false);
-        setSstError('NASA uydu döşemesi yüklenirken geçici bağlantı sorunu oluştu.');
+        setSstError('NASA GIBS katmanında tekil tile hatası oluştu; bu tek bir eşleme sorunu olabilir ve tüm katmanın tamamen çöktüğü anlamına gelmeyebilir.');
       });
 
       sstLayer.addTo(map);
@@ -497,7 +507,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       );
       watchIdRef.current = watchId;
     } catch (e: any) {
-      setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlantısı gereklidir).');
+      setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlant��sı gereklidir).');
       setIsLocating(false);
       setIsFollowingUser(false);
     }
@@ -555,8 +565,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             Samsun – Ordu Kıyı Haritası
           </h2>
           <span className="text-slate-500 font-light hidden sm:inline">·</span>
-          
-          {/* Target Fish Dropdown Selector */}
           <div className="relative">
             <button
               onClick={() => setFishDropdownOpen(!fishDropdownOpen)}
@@ -609,15 +617,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
         isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[410px]'
       }`}>
-        
-        {/* Leaflet Mount Target */}
         <div 
           ref={mapContainerRef} 
           className="w-full h-full z-10"
           style={{ touchAction: 'pan-x pan-y' }}
         />
 
-        {/* Fallback error if map fails to load */}
         {mapError && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-[#091524] text-center">
             <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
@@ -632,42 +637,41 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Geolocation Warning if User is Outside Samsun-Ordu */}
         {isUserOutsideRegion && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-xl backdrop-blur-md flex items-start gap-2 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <strong>Bölge Dışı Konum:</strong> GPS konumunuz tespit edildi ancak Samsun–Ordu kıyı analiz bölgesinin dışındasınız.
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-xl backdrop-blur-md">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>Bölge Dışı Konum:</strong> GPS konumunuz tespit edildi ancak Samsun–Ordu kıyı analiz bölgesinin dışındasınız.
+              </div>
             </div>
           </div>
         )}
 
-        {/* Geolocation Error Toast */}
         {geoErrorMsg && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-xl backdrop-blur-md flex items-center justify-between gap-2 animate-in fade-in">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-              <span>{geoErrorMsg}</span>
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-xl backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                <span>{geoErrorMsg}</span>
+              </div>
+              <button onClick={() => setGeoErrorMsg(null)} className="p-1 text-slate-400 hover:text-white">
+                <X className="w-3 h-3" />
+              </button>
             </div>
-            <button onClick={() => setGeoErrorMsg(null)} className="p-1 text-slate-400 hover:text-white">
-              <X className="w-3 h-3" />
-            </button>
           </div>
         )}
 
-        {/* Map Top-Left Quick Actions */}
         <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20 flex-wrap">
-          {/* 1. Recenter to Samsun-Ordu View */}
           <button
             onClick={handleResetView}
-            className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md transition"
+            className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md"
             title="Samsun - Ordu Genel Görünüme Sıfırla"
           >
             <RotateCcw className="w-3 h-3 text-cyan-400" />
             <span>Samsun–Ordu</span>
           </button>
 
-          {/* 2. My Location (Konumum) Button */}
           <button
             onClick={handleCenterOnUser}
             className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
@@ -681,7 +685,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <span>Konumum</span>
           </button>
 
-          {/* 3. Follow Me Toggle (Only visible when location is active) */}
           {isLocating && (
             <button
               onClick={() => setIsFollowingUser(!isFollowingUser)}
@@ -696,7 +699,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             </button>
           )}
 
-          {/* 4. REAL NASA GIBS Satellite Sea Surface Temperature (SST) Layer Toggle */}
           <button
             onClick={() => setIsSstActive(!isSstActive)}
             className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md backdrop-blur-md border transition ${
@@ -712,9 +714,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </button>
         </div>
 
-        {/* Map Top-Right: Filters & Fullscreen Toggle */}
         <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-          {/* Mera Filter Drawer Button */}
           <button
             onClick={() => setShowFilterDrawer(!showFilterDrawer)}
             className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
@@ -728,7 +728,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <span className="hidden sm:inline">Filtre</span>
           </button>
 
-          {/* Fullscreen Toggle */}
           <button
             onClick={() => {
               setIsFullscreen(!isFullscreen);
@@ -743,9 +742,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </button>
         </div>
 
-        {/* Expandable Filter Bar (Top overlay) */}
         {showFilterDrawer && (
-          <div className="absolute top-14 left-3 right-3 z-30 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-150">
+          <div className="absolute top-14 left-3 right-3 z-30 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <Filter className="w-3.5 h-3.5 text-cyan-400" />
@@ -763,7 +761,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </button>
             </div>
 
-            {/* Filter 1: City */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] text-slate-400 w-16">İl:</span>
               {(['Tümü', 'Samsun', 'Ordu'] as const).map(city => (
@@ -781,7 +778,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               ))}
             </div>
 
-            {/* Filter 2: Coast Type */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] text-slate-400 w-16">Kıyı Tipi:</span>
               {(['Tümü', 'Mendirek/Liman', 'Kayalık', 'Kumsal', 'Dere Ağzı'] as const).map(t => (
@@ -799,7 +795,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               ))}
             </div>
 
-            {/* Filter 3: Verification */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] text-slate-400 w-16">Doğrulama:</span>
               <button
@@ -830,9 +825,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Real NASA Satellite SST Layer Control Panel (When Active) */}
         {isSstActive && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-30 p-2.5 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in">
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-30 p-2.5 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md">
             <div className="flex items-center justify-between border-b border-slate-800 pb-1">
               <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
                 <Thermometer className="w-3.5 h-3.5 text-rose-400" />
@@ -841,7 +835,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               <span className="text-[9px] font-mono text-slate-400">GHRSST MUR L4 · 1 km</span>
             </div>
 
-            <div className="flex items-center justify-between text-[10px] text-slate-300">
+            <div className="flex items-center justify-between text-[10px] text-slate-300 mt-2">
               <span className="text-slate-400">Termal Saydamlık:</span>
               <div className="flex items-center gap-1">
                 {([0.45, 0.65, 0.85] as const).map((op) => (
@@ -858,8 +852,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </div>
             </div>
 
-            {/* Thermal Palette Legend (Traffic-map style gradient) */}
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 mt-2">
               <div className="flex justify-between text-[9px] text-slate-400 font-mono">
                 <span>Daha Soğuk (Mavi/Yeşil)</span>
                 <span>Daha Sıcak (Sarı/Kırmızı)</span>
@@ -867,12 +860,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
             </div>
 
-            <div className="text-[9px] text-slate-400 leading-tight">
-              <strong>Bilimsel Veri:</strong> NASA/JPL uyduları günlük deniz yüzeyi sıcaklık analizidir (20-21 Ekim 2026). Balık biyokütlesi veya anlık av garantisi değildir.
+            <div className="text-[9px] text-slate-400 leading-tight mt-2">
+              <strong>Bilimsel Veri:</strong> NASA GIBS kaynaklı günlük deniz yüzeyi sıcaklığı kompozitidir; 1 km çözünürlüktedir. Balık biyokütlesi veya anlık av garantisi değildir.
             </div>
 
             {sstError && (
-              <div className="text-[9px] text-amber-300 flex items-center gap-1">
+              <div className="text-[9px] text-amber-300 flex items-center gap-1 mt-2">
                 <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
                 <span>{sstError}</span>
               </div>
@@ -880,7 +873,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Map Bottom Legend Pill */}
         <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-2 text-[10px] text-slate-300 bg-slate-950/90 px-2.5 py-1 rounded-full border border-slate-800 backdrop-blur-md">
           <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400 font-medium">Mendirek</strong></span>
           <span>•</span>
@@ -891,7 +883,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
         </div>
 
-        {/* Bottom-Right Honest Safety Status Indicator */}
         <div className="absolute bottom-2.5 right-3 z-20">
           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/95 text-amber-300 font-medium text-[10px] shadow-md border border-amber-500/40 backdrop-blur-md">
             <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
@@ -901,10 +892,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         </div>
       </div>
 
-      {/* Selected Coordinate & Coastal Analysis Panel */}
       <div className="mt-3.5 p-4 rounded-2xl bg-[#0e1626] border border-cyan-500/30 shadow-xl space-y-3">
-        
-        {/* Top Header of Analysis Panel */}
         <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-red-950/80 border border-red-500/40 flex items-center justify-center text-red-400 text-xs shrink-0">
@@ -916,7 +904,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   {selectedSpot ? selectedSpot.name : 'Haritada Seçilen Koordinat'}
                 </span>
 
-                {/* Spot Verification Badge or Coordinate Pill */}
                 {selectedSpot ? (
                   <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
                     selectedSpot.verificationStatus === 'FIZIKI_YAPI_TEYITLI'
@@ -934,7 +921,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 )}
               </div>
 
-              {/* Exact Synchronized Coordinate Display */}
               <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-2 mt-0.5 flex-wrap">
                 <span>{selectedCoord.lat.toFixed(4)}° N, {selectedCoord.lng.toFixed(4)}° E</span>
                 {geoAnalysis.distanceToCoastKm !== null && (
@@ -946,7 +932,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             </div>
           </div>
 
-          {/* Geographic Zone Classification Badge */}
           <div className="text-right shrink-0">
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-block ${
               geoAnalysis.zoneType === 'kiyi'
@@ -962,7 +947,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {/* Verification Note (if a spot is selected) or Nearest Reference Point (if free tapped point) */}
         {selectedSpot ? (
           <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
             <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
@@ -985,7 +969,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisi değildir.
+              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisi kullanılmamaktadır.
             </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
               <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
@@ -996,10 +980,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Detailed Structure Grid & Bathymetry Warning */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-          
-          {/* Kıyı Yapısı & Coğrafi Veri */}
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
             <span className="text-slate-400 text-[10px] font-semibold">Kıyı Yapısı / Zemin:</span>
             <div className="font-bold text-slate-200">
@@ -1010,7 +991,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             </div>
           </div>
 
-          {/* Derinlik / Batimetri & Atış Mesafesi Dürüstlüğü */}
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
             <span className="text-slate-400 text-[10px] font-semibold">Batimetri (Derinlik) & Atış Analizi:</span>
             <div className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
@@ -1018,12 +998,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               <span>{selectedSpot ? selectedSpot.depthStatus : 'Doğrulanmış batimetri ölçümü bulunmuyor'}</span>
             </div>
             <div className="text-[10px] text-slate-400 leading-tight">
-              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiyesi üretilmez.
+              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiyesi verilmemektedir.
             </div>
           </div>
         </div>
 
-        {/* General Target Fish Advisory (Separated from live promises) */}
         <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="text-xl shrink-0">{selectedFish.emoji}</span>
@@ -1047,7 +1026,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {/* Cautions, Safety & Data Source Attribution */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
           <div>
             <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi
@@ -1056,13 +1034,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             ⚠ Canlı rüzgâr/dalga sensörü bağlı değildir. Güvenlik için yerel hava durumunu kontrol ediniz.
           </div>
         </div>
-
       </div>
 
-      {/* 4 Circular Quick Filter Buttons (Mera, Saat, Yem, Olta) matching reference design */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4 mt-4">
-        
-        {/* Mera Circle */}
         <button
           onClick={() => setActiveQuickTab(activeQuickTab === 'mera' ? null : 'mera')}
           className="flex flex-col items-center group"
@@ -1083,7 +1057,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </span>
         </button>
 
-        {/* Saat Circle */}
         <button
           onClick={() => setActiveQuickTab(activeQuickTab === 'saat' ? null : 'saat')}
           className="flex flex-col items-center group"
@@ -1104,7 +1077,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </span>
         </button>
 
-        {/* Yem Circle */}
         <button
           onClick={() => setActiveQuickTab(activeQuickTab === 'yem' ? null : 'yem')}
           className="flex flex-col items-center group"
@@ -1125,7 +1097,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </span>
         </button>
 
-        {/* Olta Circle */}
         <button
           onClick={() => setActiveQuickTab(activeQuickTab === 'olta' ? null : 'olta')}
           className="flex flex-col items-center group"
@@ -1147,7 +1118,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         </button>
       </div>
 
-      {/* Quick Details Drawer when a circle is clicked */}
       {activeQuickTab && (
         <div className="mt-3.5 p-4 rounded-2xl bg-[#0f172a] border border-cyan-500/30 animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-2">
@@ -1169,33 +1139,32 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div className="text-xs text-slate-300 leading-relaxed space-y-1.5">
             {activeQuickTab === 'mera' && (
               <>
-                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} kayıtlı kıyı noktası).</p>
-                <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir deltaları; liman alanlarında ise yapay taş dolgu mendirekler bulunur.</p>
+                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} teyitli/örnek nokta).</p>
+                <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir ağızları görülür.</p>
                 <p className="text-[10px] text-slate-500">Not: Kıyı yapısı sahada fırtına ve debiye bağlı olarak değişebilir; sahaya inmeden önce yerinde inceleme yapınız.</p>
               </>
             )}
             {activeQuickTab === 'saat' && (
               <>
                 <p><strong>Hedef Tür:</strong> {selectedFish.name} ({selectedFish.bestHours})</p>
-                <p><strong>Genel Bilgi:</strong> Karadeniz kıyılarında genellikle alacakaranlık, gün doğumu ve gün batımı saatleri yırtıcı türlerin kıyılaması açısından verimli kabul edilir. (Örnek/model bilgisi olup garanti değildir).</p>
+                <p><strong>Genel Bilgi:</strong> Karadeniz kıyılarında genellikle alacakaranlık, gün doğumu ve gün batımı saatleri yırtıcı türlerin kıyılaması açısından verimli olabilir.</p>
               </>
             )}
             {activeQuickTab === 'yem' && (
               <>
                 <p><strong>Tavsiye Yemler:</strong> {selectedFish.bestBaits.join(' • ')}</p>
-                <p><strong>Kıyı İpuçları:</strong> Kumluk sahillerde deniz kurdu, teke ve sülünez; kayalık burunlarda ve mendireklerde silikon karides, küçük jig ve sahte maket balıklar yaygın kullanılır.</p>
+                <p><strong>Kıyı İpuçları:</strong> Kumluk sahillerde deniz kurdu, teke ve sülünez; kayalık burunlarda ve mendireklerde silikon karides, küçük jig ve sahte maket balık önerilir.</p>
               </>
             )}
             {activeQuickTab === 'olta' && (
               <>
                 <p><strong>Tavsiye Donanım:</strong> {selectedFish.bestTackle}</p>
-                <p><strong>Yasal Asgari Boy Limiti:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Su Ürünleri Tebliği av limitlerine uymak sürdürülebilir balıkçılık için zorunludur).</p>
+                <p><strong>Yasal Asgari Boy Limiti:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Su Ürünleri Tebliği av limitlerine uymak zorunludur).</p>
               </>
             )}
           </div>
         </div>
       )}
-
     </div>
   );
 };
