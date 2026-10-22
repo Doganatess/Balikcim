@@ -35,12 +35,6 @@ interface IdealAvSahasiMapProps {
   onSelectFish: (fish: FishSpecies) => void;
 }
 
-const getSstTileDate = (): string => {
-  const date = new Date();
-  date.setUTCHours(0, 0, 0, 0);
-  return date.toISOString().slice(0, 10);
-};
-
 export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   region,
   selectedFish,
@@ -273,8 +267,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     setSstError(null);
 
     try {
-      const tileDate = getSstTileDate();
-      const sstUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/GHRSST_L4_MUR_Sea_Surface_Temperature/default/${tileDate}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
+      const sstUrl = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png';
 
       const sstLayer = L.tileLayer(sstUrl, {
         maxNativeZoom: 7,
@@ -507,7 +500,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       );
       watchIdRef.current = watchId;
     } catch (e: any) {
-      setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlant��sı gereklidir).');
+      setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlantısı gereklidir).');
       setIsLocating(false);
       setIsFollowingUser(false);
     }
@@ -969,7 +962,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisi kullanılmamaktadır.
+              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resm�� kadastro kıyı kenar çizgisi kullanılmamaktadır.
             </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
               <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
