@@ -1,0 +1,75 @@
+
+name: Build Samsun Ordu Coast Geometry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install geometry library
+        run: pip install shapely
+
+      - name: Download Natural Earth data
+        run: |
+          curl -fL --retry 3 \
+            https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_land.geojson \
+            -o /tmp/ne_10m_land.geojson
+
+      - name: Clip land geometry to Samsun-Ordu
+        run: |
+          mkdir -p src/data
+          python - <<'PY'
+          import json
+          from shapely.geometry import shape, box, mapping
+
+          bounds = box(36.05, 40.85, 38.20, 41.50)
+
+          with open("/tmp/ne_10m_land.geojson", encoding="utf-8") as f:
+              source = json.load(f)
+
+          features = []
+          for feature in source["features"]:
+              geom = shape(feature["geometry"])
+              if geom.intersects(bounds):
+                  clipped = geom.intersection(bounds)
+                  if not clipped.is_empty:
+                      features.append({
+                          "type": "Feature",
+                          "properties": {},
+                          "geometry": mapping(clipped)
+                      })
+
+          output = {
+              "type": "FeatureCollection",
+              "name": "samsun_ordu_land",
+              "features": features
+          }
+
+          with open(
+              "src/data/samsunOrduLand.geojson", "w", encoding="utf-8"
+          ) as f:
+              json.dump(output, f, separators=(",", ":"))
+
+          print(f"Üretilen geometri sayısı: {len(features)}")
+          PY
+
+      - name: Commit regional geometry
+        run: |
+          git add src/data/samsunOrduLand.geojson
+          if git diff --cached --quiet; then
+            echo "Geometri dosyasında değişiklik yok."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add regional Samsun Ordu land geometry"
+          git push
