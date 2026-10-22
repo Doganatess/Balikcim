@@ -1,5 +1,55 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
+/* Leaflet dark styling & popups */
+.leaflet-container {
+  font-family: inherit;
+  background-color: #060A0F !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0d1626 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(14, 165, 233, 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7) !important;
+}
+
+.leaflet-popup-tip {
+  background: #0d1626 !important;
+  border: 1px solid rgba(14, 165, 233, 0.3) !important;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.leaflet-bar a {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #38bdf8 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(6, 10, 15, 0.8) !important;
+  color: #94a3b8 !important;
+  font-size: 9px !important;
+  backdrop-filter: blur(4px);
+  border-radius: 6px;
+  margin: 4px !important;
+}
+
+.leaflet-control-attribution a {
+  color: #38bdf8 !important;
+}
 @layer base {
   html, body {
     height: 100%;

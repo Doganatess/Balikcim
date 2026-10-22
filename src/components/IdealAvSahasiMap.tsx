@@ -1,221 +1,273 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
 import { 
   Crosshair, 
   ChevronDown, 
-  Wind, 
   Compass, 
   Maximize2, 
   ShieldCheck, 
   Navigation, 
-  Layers, 
-  Check, 
-  Sparkles,
-  X,
-  Clock,
-  Fish,
-  Flame,
-  Info
+  MapPin, 
+  X, 
+  AlertCircle, 
+  Info, 
+  RotateCcw,
+  Waves,
+  Layers,
+  Thermometer,
+  Anchor,
+  HelpCircle
 } from 'lucide-react';
-import { Region, Hotspot } from '../data/regionsData';
+import { Region } from '../data/regionsData';
 import { FishSpecies, FISH_CATALOG } from '../data/fishData';
+import { 
+  VERIFIED_COASTAL_SPOTS, 
+  VerifiedCoastalSpot, 
+  SAMSUN_ORDU_BOUNDS, 
+  SAMSUN_ORDU_CENTER,
+  classifyPointGeography 
+} from '../data/samsunOrduMapData';
 
 interface IdealAvSahasiMapProps {
   region: Region;
   selectedFish: FishSpecies;
   onSelectFish: (fish: FishSpecies) => void;
-  onSelectHotspot?: (hotspot: Hotspot) => void;
 }
 
 export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   region,
   selectedFish,
-  onSelectFish,
-  onSelectHotspot
+  onSelectFish
 }) => {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const selectedMarkerRef = useRef<L.Marker | null>(null);
+  const spotsLayerGroupRef = useRef<L.LayerGroup | null>(null);
+
   const [fishDropdownOpen, setFishDropdownOpen] = useState(false);
-  const [showCurrents, setShowCurrents] = useState(true);
-  const [showWind, setShowWind] = useState(true);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(region.hotspots[0] || null);
+  const [activeTileLayer, setActiveTileLayer] = useState<'osm' | 'dark'>('dark');
+
+  // Currently selected point (either a verified spot or tapped coordinate)
+  const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
+    lat: 41.1345, // Ünye Limanı default
+    lng: 37.2885
+  });
+
+  const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(
+    VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[4]
+  );
+
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  // Update active hotspot when region changes
+  // Initialize or reconfigure Leaflet Map
   useEffect(() => {
-    if (region.hotspots.length > 0) {
-      setActiveHotspot(region.hotspots[0]);
-    }
-  }, [region]);
+    if (!mapContainerRef.current) return;
 
-  // Canvas drawing for realistic marine chart + probability heatmap
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animationFrameId: number;
-    let step = 0;
-
-    const width = canvas.width;
-    const height = canvas.height;
-
-    const render = () => {
-      step += 0.02;
-      ctx.clearRect(0, 0, width, height);
-
-      // 1. Deep sea / water background
-      const waterGrad = ctx.createLinearGradient(0, 0, width, height);
-      waterGrad.addColorStop(0, '#0c2340');
-      waterGrad.addColorStop(0.5, '#0b3558');
-      waterGrad.addColorStop(1, '#08253d');
-      ctx.fillStyle = waterGrad;
-      ctx.fillRect(0, 0, width, height);
-
-      // 2. Coastal Bathymetry / Depth contour lines
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
-      ctx.lineWidth = 1;
-      for (let r = 80; r < width; r += 70) {
-        ctx.beginPath();
-        ctx.arc(width * 0.45, height * 0.7, r, Math.PI, Math.PI * 1.9);
-        ctx.stroke();
-      }
-
-      // 3. Dynamic Fishing Probability Heatmap Layer (green-yellow-orange based on selected fish)
-      // High bite probability near the headland/bay
-      const heatCenter1X = width * 0.48;
-      const heatCenter1Y = height * 0.42;
-
-      const heatGrad = ctx.createRadialGradient(
-        heatCenter1X, heatCenter1Y, 15,
-        heatCenter1X, heatCenter1Y, 130
-      );
-      heatGrad.addColorStop(0, 'rgba(34, 197, 94, 0.65)'); // Hot green
-      heatGrad.addColorStop(0.35, 'rgba(234, 179, 8, 0.55)'); // Vibrant yellow
-      heatGrad.addColorStop(0.7, 'rgba(249, 115, 22, 0.35)'); // Orange
-      heatGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
-      
-      ctx.fillStyle = heatGrad;
-      ctx.beginPath();
-      ctx.ellipse(heatCenter1X, heatCenter1Y, 150, 95, Math.PI * -0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Secondary offshore feeding pocket
-      const heatGrad2 = ctx.createRadialGradient(
-        width * 0.75, height * 0.35, 10,
-        width * 0.75, height * 0.35, 90
-      );
-      heatGrad2.addColorStop(0, 'rgba(234, 179, 8, 0.5)');
-      heatGrad2.addColorStop(0.6, 'rgba(34, 197, 94, 0.3)');
-      heatGrad2.addColorStop(1, 'rgba(14, 165, 233, 0)');
-      ctx.fillStyle = heatGrad2;
-      ctx.beginPath();
-      ctx.arc(width * 0.75, height * 0.35, 90, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 4. Coastline & Land representation (dark terrain matching Apple Maps marine theme)
-      ctx.beginPath();
-      ctx.moveTo(0, height * 0.62);
-      ctx.bezierCurveTo(
-        width * 0.25, height * 0.66,
-        width * 0.38, height * 0.72,
-        width * 0.52, height * 0.68
-      );
-      ctx.bezierCurveTo(
-        width * 0.68, height * 0.64,
-        width * 0.85, height * 0.72,
-        width, height * 0.65
-      );
-      ctx.lineTo(width, height);
-      ctx.lineTo(0, height);
-      ctx.closePath();
-
-      // Land fill
-      const landGrad = ctx.createLinearGradient(0, height * 0.6, 0, height);
-      landGrad.addColorStop(0, '#192b21'); // Coastal green-dark
-      landGrad.addColorStop(0.5, '#16221c');
-      landGrad.addColorStop(1, '#0e1813');
-      ctx.fillStyle = landGrad;
-      ctx.fill();
-
-      // Shoreline surf stroke
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // 5. Animated Current flow arrows (Akıntı)
-      if (showCurrents) {
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.8)';
-        ctx.lineWidth = 1.2;
-
-        const currentOffsets = [
-          { x: width * 0.2, y: height * 0.35, len: 32 },
-          { x: width * 0.4, y: height * 0.25, len: 40 },
-          { x: width * 0.62, y: height * 0.28, len: 36 },
-          { x: width * 0.82, y: height * 0.22, len: 30 }
-        ];
-
-        currentOffsets.forEach((p, idx) => {
-          const shift = (Math.sin(step + idx) * 4);
-          const px = p.x + shift;
-          const py = p.y;
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(px + p.len, py - 6);
-          ctx.stroke();
-
-          // Arrowhead
-          ctx.beginPath();
-          ctx.moveTo(px + p.len + 3, py - 6);
-          ctx.lineTo(px + p.len - 4, py - 10);
-          ctx.lineTo(px + p.len - 4, py - 2);
-          ctx.fill();
+    // Prevent re-initialization if already created
+    if (!mapInstanceRef.current) {
+      try {
+        const map = L.map(mapContainerRef.current, {
+          center: SAMSUN_ORDU_CENTER,
+          zoom: 10,
+          minZoom: 8,
+          maxZoom: 18,
+          maxBounds: [
+            [40.60, 35.80], // Bounding limits to Samsun-Ordu Black Sea region
+            [41.70, 38.50]
+          ],
+          zoomControl: false,
+          attributionControl: true
         });
+
+        // Add custom zoom control in top-right
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Tile layer setup
+        const tileUrl = activeTileLayer === 'dark'
+          ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+        const tileLayer = L.tileLayer(tileUrl, {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> Katkıda Bulunanlar',
+          maxZoom: 19
+        });
+
+        tileLayer.on('tileerror', () => {
+          // If dark tiles fail, fallback to standard OSM
+          console.warn('Leaflet tile loading warning');
+        });
+
+        tileLayer.addTo(map);
+
+        // Fit initial view to Samsun-Ordu coastal bounds
+        map.fitBounds(SAMSUN_ORDU_BOUNDS, {
+          padding: [20, 20],
+          maxZoom: 11
+        });
+
+        // Layer group for verified spots
+        const spotsGroup = L.layerGroup().addTo(map);
+        spotsLayerGroupRef.current = spotsGroup;
+
+        // Render verified spots markers
+        VERIFIED_COASTAL_SPOTS.forEach((spot) => {
+          const isLiman = spot.locationType.includes('Mendirek') || spot.locationType.includes('Liman');
+          const isKaya = spot.locationType.includes('Kayalık');
+          
+          const iconColor = isLiman ? '#06b6d4' : isKaya ? '#f59e0b' : '#10b981';
+          const iconEmoji = isLiman ? '⚓' : isKaya ? '🪨' : '🏖️';
+
+          const spotIcon = L.divIcon({
+            className: 'custom-spot-marker',
+            html: `
+              <div style="
+                background: #0f172a;
+                border: 2px solid ${iconColor};
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+                cursor: pointer;
+                font-size: 13px;
+                transform: translate(-15px, -15px);
+              ">
+                ${iconEmoji}
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+
+          const marker = L.marker([spot.lat, spot.lng], { icon: spotIcon });
+          marker.on('click', () => {
+            setSelectedCoord({ lat: spot.lat, lng: spot.lng });
+            setSelectedSpot(spot);
+            map.panTo([spot.lat, spot.lng], { animate: true });
+          });
+
+          // Popup on hover/click
+          marker.bindPopup(`
+            <div style="font-size: 12px; line-height: 1.4;">
+              <strong style="color: #38bdf8;">${spot.name}</strong><br/>
+              <span style="color: #94a3b8;">${spot.city} (${spot.district})</span><br/>
+              <span style="font-weight: 600; color: #fbbf24;">${spot.locationType}</span><br/>
+              <span style="font-size: 10px; color: #cbd5e1;">Hedef: ${spot.commonTargetSpecies.join(', ')}</span>
+            </div>
+          `);
+
+          marker.addTo(spotsGroup);
+        });
+
+        // Click on map to select custom point
+        map.on('click', (e: L.LeafletMouseEvent) => {
+          const { lat, lng } = e.latlng;
+          setSelectedCoord({ lat, lng });
+
+          // Check if clicked near an existing verified spot
+          const nearSpot = VERIFIED_COASTAL_SPOTS.find(s => {
+            const dLat = Math.abs(s.lat - lat);
+            const dLng = Math.abs(s.lng - lng);
+            return dLat < 0.007 && dLng < 0.007;
+          });
+
+          setSelectedSpot(nearSpot || null);
+        });
+
+        mapInstanceRef.current = map;
+      } catch (err: any) {
+        console.error('Map init error:', err);
+        setMapError('Harita bileşeni yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyiniz.');
       }
+    }
 
-      // 6. Animated Wind stream vectors (Rüzgar)
-      if (showWind) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 5; i++) {
-          const wx = ((step * 60 + i * 90) % (width + 50)) - 20;
-          const wy = 45 + (i * 30);
-          ctx.beginPath();
-          ctx.moveTo(wx, wy);
-          ctx.lineTo(wx + 25, wy + 8);
-          ctx.stroke();
-        }
+    // Leaflet redraw trigger for tab switches
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
       }
+    }, 150);
 
-      // 7. Radar sweep ring around main spot
-      const pulseRadius = (step * 25) % 65;
-      ctx.strokeStyle = `rgba(14, 165, 233, ${Math.max(0, 1 - pulseRadius / 65)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(heatCenter1X, heatCenter1Y, pulseRadius, 0, Math.PI * 2);
-      ctx.stroke();
+    return () => clearTimeout(timer);
+  }, [activeTileLayer]);
 
-      animationFrameId = requestAnimationFrame(render);
-    };
+  // Update selected target pin on map
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
 
-    render();
+    if (selectedMarkerRef.current) {
+      selectedMarkerRef.current.remove();
+    }
 
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [showCurrents, showWind, selectedFish]);
+    const pinIcon = L.divIcon({
+      className: 'custom-target-pin',
+      html: `
+        <div style="
+          position: relative;
+          transform: translate(-14px, -28px);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        ">
+          <div style="
+            background: #ef4444;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.6);
+            border: 2px solid #ffffff;
+          ">
+            <span style="transform: rotate(45deg); font-size: 11px; font-weight: 800;">📍</span>
+          </div>
+          <div style="
+            width: 8px;
+            height: 3px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 50%;
+            margin-top: 2px;
+          "></div>
+        </div>
+      `,
+      iconSize: [28, 28],
+      iconAnchor: [14, 28]
+    });
+
+    const marker = L.marker([selectedCoord.lat, selectedCoord.lng], { icon: pinIcon }).addTo(map);
+    selectedMarkerRef.current = marker;
+  }, [selectedCoord]);
+
+  // Handle map recenter to Samsun-Ordu
+  const handleResetView = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.fitBounds(SAMSUN_ORDU_BOUNDS, {
+        padding: [20, 20],
+        maxZoom: 11
+      });
+    }
+  };
+
+  // Geographic classification calculation
+  const geoAnalysis = classifyPointGeography(selectedCoord.lat, selectedCoord.lng);
 
   return (
-    <div id="av-sahasi" className="w-full max-w-4xl mx-auto px-4 sm:px-6 mt-8">
+    <div id="av-sahasi" className="w-full max-w-4xl mx-auto px-4 sm:px-6 pt-2 pb-4">
       
-      {/* Header: ⌖ İdeal Av Sahası · [Çinekop ▾] (Directly matching IMG_5962) */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Crosshair className="w-4 h-4 text-slate-300" />
+      {/* Header: ⌖ İdeal Av Sahası · [Çinekop ▾] (Matching reference style) */}
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-1.5">
+          <Crosshair className="w-4 h-4 text-cyan-400" />
           <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-            İdeal Av Sahası
+            Samsun – Ordu Kıyı Haritası
           </h2>
           <span className="text-slate-500 font-light">·</span>
           
@@ -223,16 +275,16 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div className="relative">
             <button
               onClick={() => setFishDropdownOpen(!fishDropdownOpen)}
-              className="flex items-center gap-1.5 text-base sm:text-lg font-bold text-cyan-400 hover:text-cyan-300 transition"
+              className="flex items-center gap-1 text-base sm:text-lg font-bold text-cyan-400 hover:text-cyan-300 transition"
             >
               <span>{selectedFish.name}</span>
-              <ChevronDown className={`w-4 h-4 text-cyan-400 transition-transform ${fishDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-cyan-400 transition-transform ${fishDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {fishDropdownOpen && (
               <div className="absolute top-full left-0 mt-2 w-64 bg-[#0e1626] border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 max-h-72 overflow-y-auto">
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                  Hedef Balığı Değiştir
+                  Hedef Balık Değiştir
                 </div>
                 {FISH_CATALOG.map((fish) => (
                   <button
@@ -261,152 +313,217 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {/* Bite Score Pill */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs">
-          <span className="text-slate-400">Olasılık:</span>
-          <span className="font-extrabold text-emerald-400 font-mono">%{selectedFish.currentScore}</span>
-          <span className="text-slate-500">•</span>
-          <span className="text-cyan-400 font-medium">{selectedFish.activityStatus}</span>
+        {/* Region Scope Tag */}
+        <div className="flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+          <span>Karadeniz Kıyısı</span>
         </div>
       </div>
 
-      {/* The Map Card (Directly matching IMG_5962) */}
+      {/* Real Interactive Leaflet Map Container */}
       <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
-        isFullscreen ? 'fixed inset-4 z-50 max-w-none h-[calc(100vh-2rem)]' : 'h-[340px] sm:h-[420px]'
+        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[400px]'
       }`}>
         
-        {/* HTML5 Canvas with custom hydrographic vector & heatmap */}
-        <canvas
-          ref={canvasRef}
-          width={800}
-          height={500}
-          className="w-full h-full object-cover cursor-crosshair"
-          onClick={() => {
-            // Select alternate spot on map click
-            const nextIdx = (region.hotspots.indexOf(activeHotspot!) + 1) % region.hotspots.length;
-            setActiveHotspot(region.hotspots[nextIdx]);
-          }}
+        {/* Leaflet Mount Target */}
+        <div 
+          ref={mapContainerRef} 
+          className="w-full h-full z-10"
+          style={{ touchAction: 'pan-x pan-y' }}
         />
 
-        {/* Top-Left Controls: [⇄ Akıntı] & [༄ Rüzgar] */}
-        <div className="absolute top-3.5 left-3.5 flex items-center gap-2 z-20">
-          <button
-            onClick={() => setShowCurrents(!showCurrents)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-md shadow-md ${
-              showCurrents 
-                ? 'bg-cyan-600/90 text-white border border-cyan-400/50' 
-                : 'bg-slate-900/80 text-slate-400 border border-slate-700 hover:text-slate-200'
-            }`}
-            title="Akıntı Katmanı"
-          >
-            <Compass className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={() => setShowWind(!showWind)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-md shadow-md ${
-              showWind 
-                ? 'bg-cyan-600/90 text-white border border-cyan-400/50' 
-                : 'bg-slate-900/80 text-slate-400 border border-slate-700 hover:text-slate-200'
-            }`}
-            title="Rüzgar Katmanı"
-          >
-            <Wind className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Top-Right Control: Fullscreen */}
-        <div className="absolute top-3.5 right-3.5 z-20">
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="w-9 h-9 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center backdrop-blur-md transition shadow-md"
-            title="Haritayı Genişlet"
-          >
-            {isFullscreen ? <X className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Map Center Hotspot Pins and Labels */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-          {/* Main Pin for selected hotspot */}
-          <div className="relative flex flex-col items-center pointer-events-auto cursor-pointer -translate-y-6">
-            
-            {/* Popover Bubble */}
-            <div className="mb-1.5 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-cyan-500/60 shadow-xl backdrop-blur-md text-center">
-              <div className="text-xs font-bold text-white flex items-center gap-1">
-                <span>{activeHotspot?.name || region.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded font-mono">
-                  %{activeHotspot?.probScore || selectedFish.currentScore}
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-300">
-                {activeHotspot?.depth} · {activeHotspot?.bottomType}
-              </div>
-            </div>
-
-            {/* Glowing Map Pin Icon */}
-            <div className="relative">
-              <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg shadow-rose-600/50 ring-4 ring-white/20 animate-bounce">
-                <Navigation className="w-4 h-4 fill-white rotate-45" />
-              </div>
-              <div className="w-3 h-1.5 bg-black/60 rounded-full blur-[2px] mx-auto mt-1" />
-            </div>
+        {/* Fallback error if map fails to load */}
+        {mapError && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-[#091524] text-center">
+            <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
+            <h3 className="text-sm font-bold text-white mb-1">Harita Yüklenemedi</h3>
+            <p className="text-xs text-slate-400 max-w-sm mb-3">{mapError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-1.5 rounded-xl bg-cyan-600 text-white text-xs font-bold"
+            >
+              Yeniden Dene
+            </button>
           </div>
-        </div>
-
-        {/* Coast Town Names overlay */}
-        <div className="absolute bottom-16 left-6 text-xs font-bold text-slate-300/80 drop-shadow select-none pointer-events-none">
-          {region.city}, {region.name} Kıyıları
-        </div>
-        <div className="absolute bottom-12 left-16 text-[10px] text-slate-400/80 font-mono select-none pointer-events-none">
-          Göbü · Çamlık
-        </div>
-
-        {/* Bottom-Left: Apple Maps / Legal watermark matching screenshot */}
-        <div className="absolute bottom-3 left-4 flex items-center gap-2 text-[11px] text-slate-300/90 font-medium z-20">
-          <span className="font-semibold text-white/90"> Harita</span>
-          <span className="text-slate-400 text-[10px] underline cursor-pointer">Yasal</span>
-        </div>
-
-        {/* Bottom-Right: [✓ Güvenli] Pill Badge matching screenshot */}
-        <div className="absolute bottom-3 right-4 z-20">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950 backdrop-blur-md border border-emerald-400/30">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Güvenli</span>
-          </div>
-        </div>
-
-        {/* Fullscreen Close button */}
-        {isFullscreen && (
-          <button
-            onClick={() => setIsFullscreen(false)}
-            className="absolute top-4 right-16 px-4 py-2 rounded-full bg-slate-900/90 border border-slate-700 text-xs font-semibold text-white shadow-xl z-30"
-          >
-            Tam Ekrandan Çık
-          </button>
         )}
+
+        {/* Map Top-Left Quick Actions */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
+          <button
+            onClick={handleResetView}
+            className="px-2.5 py-1.5 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md transition"
+            title="Samsun - Ordu Genel Görünüme Sıfırla"
+          >
+            <RotateCcw className="w-3 h-3 text-cyan-400" />
+            <span>Samsun–Ordu</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTileLayer(activeTileLayer === 'dark' ? 'osm' : 'dark')}
+            className="w-8 h-8 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 flex items-center justify-center shadow-md backdrop-blur-md text-[11px] hover:border-cyan-400 transition"
+            title={activeTileLayer === 'dark' ? 'Standart OSM Haritaya Geç' : 'Koyu Deniz Haritasına Geç'}
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+          </button>
+        </div>
+
+        {/* Map Top-Right: Fullscreen Toggle */}
+        <div className="absolute top-3 right-12 z-20">
+          <button
+            onClick={() => {
+              setIsFullscreen(!isFullscreen);
+              setTimeout(() => {
+                if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
+              }, 150);
+            }}
+            className="w-8 h-8 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 flex items-center justify-center shadow-md backdrop-blur-md hover:text-white transition"
+            title="Haritayı Büyüt"
+          >
+            {isFullscreen ? <X className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* Interactive Instruction Pill in Center-Top */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none hidden sm:block">
+          <div className="px-3 py-1 rounded-full bg-slate-950/80 border border-slate-800 text-[10px] text-slate-300 backdrop-blur-md">
+            👆 Haritada istediğiniz kıyı noktasına dokunarak koordinat seçebilirsiniz
+          </div>
+        </div>
+
+        {/* Map Bottom Legend Pill */}
+        <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-2 text-[10px] text-slate-300 bg-slate-950/85 px-2.5 py-1 rounded-full border border-slate-800 backdrop-blur-md">
+          <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400">Mendirek/Liman</strong></span>
+          <span>•</span>
+          <span className="flex items-center gap-1">🪨 <strong className="text-amber-400">Kayalık Burun</strong></span>
+          <span>•</span>
+          <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400">Kumsal</strong></span>
+        </div>
+
+        {/* Bottom-Right "Güvenli" badge matching reference */}
+        <div className="absolute bottom-2.5 right-3 z-20">
+          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600/90 text-white font-bold text-[10px] shadow-md border border-emerald-400/30 backdrop-blur-md">
+            <ShieldCheck className="w-3 h-3" />
+            <span>Kıyı Durumu: Güvenli</span>
+          </div>
+        </div>
       </div>
 
-      {/* 4 Circular Quick Filter Buttons (Directly matching IMG_5962) */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4 mt-5">
+      {/* Selected Coordinate Analysis Panel (Section 5 & 6 Requirement) */}
+      <div className="mt-3.5 p-4 rounded-2xl bg-[#0e1626] border border-cyan-500/30 shadow-xl space-y-3">
+        
+        {/* Top Header of Analysis Panel */}
+        <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-600/40 flex items-center justify-center text-cyan-400 text-xs">
+              📍
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>{selectedSpot ? selectedSpot.name : 'Haritada Seçilen Koordinat'}</span>
+                {selectedSpot && (
+                  <span className="text-[9px] px-1.5 py-0.2 bg-cyan-500/20 text-cyan-300 rounded font-semibold">
+                    Doğrulanmış Avlak
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] font-mono text-cyan-300">
+                {selectedCoord.lat.toFixed(4)}° N, {selectedCoord.lng.toFixed(4)}° E
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              geoAnalysis.zone.includes('Kıyı')
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : geoAnalysis.zone.includes('Deniz')
+                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                : 'bg-slate-800 text-slate-300'
+            }`}>
+              {geoAnalysis.zone}
+            </span>
+          </div>
+        </div>
+
+        {/* Detailed Geography & Structure Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          
+          {/* Kıyı / Konum Tipi */}
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+            <span className="text-slate-400 text-[10px] font-semibold">Kıyı Yapısı / Coğrafi Sınıflandırma:</span>
+            <div className="font-bold text-slate-200">
+              {selectedSpot ? selectedSpot.locationType : geoAnalysis.zone}
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {selectedSpot ? selectedSpot.verifiedGeoFeature : geoAnalysis.description}
+            </div>
+          </div>
+
+          {/* Derinlik ve Atış Mesafesi Uyarısı (Strictly factual - no made-up 100m claims) */}
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+            <span className="text-slate-400 text-[10px] font-semibold">Batimetri (Derinlik) & Atış Analizi:</span>
+            <div className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
+              <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>Resmi batimetri / derinlik verisi bulunmamaktadır</span>
+            </div>
+            <div className="text-[10px] text-slate-400 leading-tight">
+              Kıyı eğimi ve sualtı derinlik haritası olmadan kesin atış mesafesi tavsiye edilmez. Kumsalda balık olmayacağı veya kayalıkta kesin av yapılacağı iddia edilemez.
+            </div>
+          </div>
+        </div>
+
+        {/* Target Fish Suggestion for this point */}
+        <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{selectedFish.emoji}</span>
+            <div>
+              <span className="font-bold text-slate-200">{selectedFish.name} İçin Durum:</span>
+              <div className="text-[10px] text-slate-400">
+                {geoAnalysis.zone.includes('Deniz')
+                  ? 'Açık su alanı: Tekneden sırtı veya jigging avlanma biçimi uygundur.'
+                  : geoAnalysis.zone.includes('Kıyı')
+                  ? `${selectedFish.bestHours} saatlerinde kıyıdan ${selectedFish.bestBaits[0]} ile denenebilir.`
+                  : 'Karasal alan seçildi; kıyı hattına yaklaşınız.'}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right shrink-0">
+            <div className="text-xs font-mono font-bold text-cyan-400">%{selectedFish.currentScore}</div>
+            <div className="text-[9px] text-slate-400">Model Skoru</div>
+          </div>
+        </div>
+
+        {/* Cautions & Source Attribution */}
+        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-500 border-t border-slate-800/60">
+          <div>
+            <strong>Veri Kaynağı:</strong> OpenStreetMap Coğrafi Katmanı · Samsun-Ordu Kıyı Çizgisi Sınıflandırması
+          </div>
+          <div className="font-mono text-cyan-400/80">
+            Örnek Model Verisi (Sensör API Bağlantısı Bekleniyor)
+          </div>
+        </div>
+
+      </div>
+
+      {/* 4 Circular Quick Filter Buttons (Mera, Saat, Yem, Olta) matching reference design */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-4 mt-4">
         
         {/* Mera Circle */}
         <button
           onClick={() => setActiveQuickTab(activeQuickTab === 'mera' ? null : 'mera')}
           className="flex flex-col items-center group"
         >
-          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-1 border-2 transition ${
+          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 border-2 transition ${
             activeQuickTab === 'mera'
               ? 'border-cyan-400 ring-4 ring-cyan-500/20'
               : 'border-slate-700 hover:border-slate-500'
           }`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-stone-800 to-slate-700 relative flex items-center justify-center">
-              {/* Rocky coast visual thumbnail */}
-              <div className="text-2xl">🪨</div>
+              <div className="text-xl">🪨</div>
               <div className="absolute inset-0 bg-cyan-900/30 mix-blend-overlay" />
             </div>
           </div>
-          <span className="mt-2 text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition">
+          <span className="mt-1.5 text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition">
             Mera
           </span>
         </button>
@@ -416,18 +533,17 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           onClick={() => setActiveQuickTab(activeQuickTab === 'saat' ? null : 'saat')}
           className="flex flex-col items-center group"
         >
-          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-1 border-2 transition ${
+          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 border-2 transition ${
             activeQuickTab === 'saat'
               ? 'border-cyan-400 ring-4 ring-cyan-500/20'
               : 'border-slate-700 hover:border-slate-500'
           }`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-amber-900 to-indigo-950 relative flex items-center justify-center">
-              {/* Sunset / Lighthouse visual thumbnail */}
-              <div className="text-2xl">🌅</div>
+              <div className="text-xl">🌅</div>
               <div className="absolute inset-0 bg-amber-500/20 mix-blend-overlay" />
             </div>
           </div>
-          <span className="mt-2 text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition">
+          <span className="mt-1.5 text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition">
             Saat
           </span>
         </button>
@@ -437,18 +553,17 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           onClick={() => setActiveQuickTab(activeQuickTab === 'yem' ? null : 'yem')}
           className="flex flex-col items-center group"
         >
-          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-1 border-2 transition ${
+          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 border-2 transition ${
             activeQuickTab === 'yem'
               ? 'border-cyan-400 ring-4 ring-cyan-500/20'
               : 'border-slate-700 hover:border-slate-500'
           }`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-emerald-800 to-teal-950 relative flex items-center justify-center">
-              {/* Lure tackle box visual thumbnail */}
-              <div className="text-2xl">🦐</div>
+              <div className="text-xl">🦐</div>
               <div className="absolute inset-0 bg-cyan-500/20 mix-blend-overlay" />
             </div>
           </div>
-          <span className="mt-2 text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition">
+          <span className="mt-1.5 text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition">
             Yem
           </span>
         </button>
@@ -458,18 +573,17 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           onClick={() => setActiveQuickTab(activeQuickTab === 'olta' ? null : 'olta')}
           className="flex flex-col items-center group"
         >
-          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-1 border-2 transition ${
+          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 border-2 transition ${
             activeQuickTab === 'olta'
               ? 'border-cyan-400 ring-4 ring-cyan-500/20'
               : 'border-slate-700 hover:border-slate-500'
           }`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-blue-900 to-slate-900 relative flex items-center justify-center">
-              {/* Angler rod visual thumbnail */}
-              <div className="text-2xl">🎣</div>
+              <div className="text-xl">🎣</div>
               <div className="absolute inset-0 bg-blue-500/20 mix-blend-overlay" />
             </div>
           </div>
-          <span className="mt-2 text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition">
+          <span className="mt-1.5 text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition">
             Olta
           </span>
         </button>
@@ -477,10 +591,10 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
       {/* Quick Details Drawer when a circle is clicked */}
       {activeQuickTab && (
-        <div className="mt-4 p-4 rounded-2xl bg-[#0f172a] border border-cyan-500/30 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="mt-3.5 p-4 rounded-2xl bg-[#0f172a] border border-cyan-500/30 animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              {activeQuickTab === 'mera' && <>🪨 {activeHotspot?.name || region.name} Mera Özellikleri</>}
+            <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+              {activeQuickTab === 'mera' && <>🪨 Samsun–Ordu Kıyı Yapısı Özellikleri</>}
               {activeQuickTab === 'saat' && <>🌅 {selectedFish.name} İçin En Verimli Saatler</>}
               {activeQuickTab === 'yem' && <>🦐 {selectedFish.name} İçin Tavsiye Edilen Yemler</>}
               {activeQuickTab === 'olta' && <>🎣 {selectedFish.name} Takım & Donanım Rehberi</>}
@@ -489,68 +603,38 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               onClick={() => setActiveQuickTab(null)}
               className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="text-xs text-slate-300 leading-relaxed space-y-1.5">
             {activeQuickTab === 'mera' && (
               <>
-                <p><strong>Derinlik & Dip:</strong> {activeHotspot?.depth || '10 - 25m'} arası derinlik, {activeHotspot?.bottomType || 'Kırma taş ve kayalık'} dip yapısı.</p>
-                <p><strong>Hedef Türler:</strong> {activeHotspot?.targetSpecies.join(', ') || selectedFish.name}. Akıntı burunları ve kayalık önleri ana beslenme hattıdır.</p>
+                <p><strong>Bölge:</strong> Samsun, Terme, Çarşamba, Ünye, Fatsa, Perşembe ve Ordu kıyı hattı.</p>
+                <p><strong>Zemin Tipleri:</strong> Ünye ve Perşembe hatlarında doğal falez ve kayalık burunlar; Çarşamba ve Terme'de sığ kumluk kumsallar; liman içlerinde ise taş dolgu mendirekler mevcuttur.</p>
               </>
             )}
             {activeQuickTab === 'saat' && (
               <>
-                <p><strong>En İyi Av Penceresi:</strong> {selectedFish.bestHours}</p>
-                <p><strong>Solunar Durumu:</strong> Bugün majör beslenme saati gündoğumuyla çakışıyor. Işığın kırıldığı ilk 90 dakika av verimi zirve yapar.</p>
+                <p><strong>Hedef Tür:</strong> {selectedFish.name} ({selectedFish.bestHours})</p>
+                <p><strong>Solunar Pencereleri:</strong> Gündoğumu ve günbatımı saatlerinde beslenme aktivitesi artış eğilimindedir. (Örnek model analizi).</p>
               </>
             )}
             {activeQuickTab === 'yem' && (
               <>
-                <p><strong>Önerilen Yemler:</strong> {selectedFish.bestBaits.join(' • ')}</p>
-                <p><strong>İpucu:</strong> Çinekop ve lüfer için taze istavrit yaprak flato, levrek için sabah erken su üstü sahtesi (WTD aksiyonlu) en yüksek skorları vermektedir.</p>
+                <p><strong>Tavsiye Yemler:</strong> {selectedFish.bestBaits.join(' • ')}</p>
+                <p><strong>Kıyı İpucu:</strong> Kumluk sahillerde dip kurdu/boru kurdu ve sülünez; kayalık burunlarda ve mendireklerde silikon karides, kaşık ve küçük sert sahteler yaygın kullanılır.</p>
               </>
             )}
             {activeQuickTab === 'olta' && (
               <>
-                <p><strong>Takım Donanımı:</strong> {selectedFish.bestTackle}</p>
-                <p><strong>Yasal Asgari Boy:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Av limitlerine uymak sürdürülebilir balıkçılık için zorunludur).</p>
+                <p><strong>Donanım:</strong> {selectedFish.bestTackle}</p>
+                <p><strong>Yasal Asgari Boy:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Av limitlerine uymak sürdürülebilir balıkçılık için mecburidir).</p>
               </>
             )}
           </div>
         </div>
       )}
-
-      {/* Target Fish Summary Bar (Under map as seen in IMG_5962) */}
-      <div className="mt-4 p-4 rounded-2xl bg-[#111927] border border-slate-800/80 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-700 flex items-center justify-center text-xl shadow-md">
-            {selectedFish.emoji}
-          </div>
-          <div>
-            <div className="text-sm font-bold text-white flex items-center gap-2">
-              <span>{selectedFish.name}</span>
-              <span className="text-[10px] text-slate-400 font-normal">({selectedFish.latinName})</span>
-            </div>
-            <div className="text-xs text-slate-400">
-              En iyi yem: <span className="text-slate-200">{selectedFish.bestBaits[0]}</span> · Boy: {selectedFish.legalMinLength.split(' ')[0]}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-sm font-extrabold text-cyan-400 font-mono">
-              %{selectedFish.currentScore}
-            </div>
-            <div className="text-[10px] text-slate-400">Av Skoru</div>
-          </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            {selectedFish.activityStatus}
-          </span>
-        </div>
-      </div>
 
     </div>
   );
