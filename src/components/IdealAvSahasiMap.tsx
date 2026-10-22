@@ -10,9 +10,13 @@ import {
   RotateCcw,
   HelpCircle,
   Navigation,
-  Flame,
+  Thermometer,
+  Waves,
   Filter,
-  Check
+  Layers,
+  Sliders,
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import { Region } from '../data/regionsData';
 import { FishSpecies, FISH_CATALOG } from '../data/fishData';
@@ -38,12 +42,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const baseTileLayerRef = useRef<L.TileLayer | null>(null);
+  const sstTileLayerRef = useRef<L.TileLayer | null>(null);
   const selectedMarkerRef = useRef<L.Marker | null>(null);
   const spotsLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const heatLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
-  // User location tracking refs & states
+  // User location tracking refs
   const watchIdRef = useRef<number | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
@@ -59,8 +63,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [geoErrorMsg, setGeoErrorMsg] = useState<string | null>(null);
   const [isUserOutsideRegion, setIsUserOutsideRegion] = useState(false);
 
-  // Heatmap toggle
-  const [isHeatmapActive, setIsHeatmapActive] = useState(false);
+  // NASA GIBS Real Sea Surface Temperature (SST) Satellite Layer states
+  const [isSstActive, setIsSstActive] = useState(false);
+  const [sstOpacity, setSstOpacity] = useState<number>(0.65);
+  const [sstLoading, setSstLoading] = useState(false);
+  const [sstError, setSstError] = useState<string | null>(null);
 
   // Mera filtering states
   const [cityFilter, setCityFilter] = useState<'Tümü' | 'Samsun' | 'Ordu'>('Tümü');
@@ -68,10 +75,10 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'FIZIKI_YAPI_TEYITLI' | 'COGRAFI_REFERANS_NOKTASI'>('Tümü');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
-  // Currently selected point (either a spot or tapped coordinate)
+  // Currently selected point (defaults to Ünye Liman Mendireği)
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
-    lat: 41.1345,
-    lng: 37.2885
+    lat: 41.1355,
+    lng: 37.2915
   });
 
   const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(
@@ -102,7 +109,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       html: `
         <div style="
           position: relative;
-          transform: translate(-14px, -30px);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -118,7 +124,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.7);
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.75);
             border: 2px solid #ffffff;
           ">
             <span style="transform: rotate(45deg); font-size: 12px; font-weight: 800;">📍</span>
@@ -128,12 +134,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             height: 4px;
             background: rgba(0,0,0,0.6);
             border-radius: 50%;
-            margin-top: 2px;
+            margin-top: 1px;
           "></div>
         </div>
       `,
-      iconSize: [28, 30],
-      iconAnchor: [14, 30]
+      iconSize: [28, 33],
+      iconAnchor: [14, 33]
     });
   }, []);
 
@@ -147,7 +153,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             position: absolute;
             width: 22px;
             height: 22px;
-            background: rgba(14, 165, 233, 0.35);
+            background: rgba(14, 165, 233, 0.4);
             border-radius: 50%;
             animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
           "></div>
@@ -157,7 +163,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             background: #0284c7;
             border: 2.5px solid #ffffff;
             border-radius: 50%;
-            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.8);
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.85);
             z-index: 2;
           "></div>
         </div>
@@ -173,7 +179,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     if (mapInstanceRef.current) return;
 
     try {
-      // Relaxed maxBounds so users located anywhere can be shown safely
       const map = L.map(mapContainerRef.current, {
         center: SAMSUN_ORDU_CENTER,
         zoom: 10,
@@ -186,23 +191,19 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       // Zoom control in top-right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // OpenStreetMap tile layer
-      const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // OpenStreetMap Base Tiles
+      const baseTile = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> Katkıda Bulunanlar',
         maxZoom: 19
       });
-      tileLayer.addTo(map);
-      tileLayerRef.current = tileLayer;
+      baseTile.addTo(map);
+      baseTileLayerRef.current = baseTile;
 
       // Fit to Samsun-Ordu coastal frame initially
       map.fitBounds(SAMSUN_ORDU_BOUNDS, {
         padding: [20, 20],
         maxZoom: 11
       });
-
-      // Heatmap layer group
-      const heatGroup = L.layerGroup().addTo(map);
-      heatLayerGroupRef.current = heatGroup;
 
       // Spots layer group
       const spotsGroup = L.layerGroup().addTo(map);
@@ -216,7 +217,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       }).addTo(map);
       selectedMarkerRef.current = targetMarker;
 
-      // Map click handler: updates coordinates and CLEARS spot selection
+      // Map click handler: updates coordinates and clears spot name
       map.on('click', (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
         setSelectedCoord({ lat, lng });
@@ -235,7 +236,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
 
     return () => {
-      // Cleanup watchPosition
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -247,7 +247,67 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     };
   }, [createPinIcon]);
 
-  // 2. Render and update spot markers when filteredSpots changes
+  // 2. Real NASA GIBS Satellite Sea Surface Temperature (SST) Layer Management
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Clean up existing SST layer if present
+    if (sstTileLayerRef.current) {
+      map.removeLayer(sstTileLayerRef.current);
+      sstTileLayerRef.current = null;
+    }
+
+    if (!isSstActive) {
+      setSstLoading(false);
+      setSstError(null);
+      return;
+    }
+
+    setSstLoading(true);
+    setSstError(null);
+
+    try {
+      // NASA GIBS GHRSST MUR Level 4 Sea Surface Temperature Layer (1km analysis, Daily composite)
+      // WMTS Web Mercator (EPSG:3857) GoogleMapsCompatible_Level7
+      const sstLayer = L.tileLayer(
+        'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png',
+        {
+          maxNativeZoom: 7,
+          maxZoom: 18,
+          opacity: sstOpacity,
+          zIndex: 5, // Positioned above base OSM tiles, but strictly below spot markers (spotsGroup)
+          attribution: '&copy; <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> · GHRSST MUR Deniz Yüzeyi Sıcaklığı (1 km / Günlük Analiz)'
+        }
+      );
+
+      sstLayer.on('load', () => {
+        setSstLoading(false);
+      });
+
+      sstLayer.on('tileerror', () => {
+        setSstLoading(false);
+        setSstError('NASA uydu döşemesi yüklenirken geçici bağlantı sorunu oluştu.');
+      });
+
+      sstLayer.addTo(map);
+      sstTileLayerRef.current = sstLayer;
+    } catch (e: any) {
+      console.error('NASA GIBS SST layer error:', e);
+      setSstError('Uydu katmanı servisine ulaşılamadı.');
+      setSstLoading(false);
+    }
+  }, [isSstActive, sstOpacity]);
+
+  // Update opacity dynamically without re-creating layer
+  useEffect(() => {
+    if (sstTileLayerRef.current) {
+      sstTileLayerRef.current.setOpacity(sstOpacity);
+    }
+  }, [sstOpacity]);
+
+  // 3. Render and update spot markers when filteredSpots changes
+  // FIX FOR ZOOM: Centered iconAnchor [14, 14] without conflicting inner translate offsets
   useEffect(() => {
     if (!mapInstanceRef.current || !spotsLayerGroupRef.current) return;
     const spotsGroup = spotsLayerGroupRef.current;
@@ -268,6 +328,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
       const iconEmoji = isLiman ? '⚓' : isKaya ? '🪨' : spot.locationType.includes('Dere') ? '🌊' : '🏖️';
 
+      // Pixel-perfect centered Leaflet divIcon: iconAnchor matches exactly half of iconSize
       const spotIcon = L.divIcon({
         className: 'custom-spot-marker',
         html: `
@@ -280,10 +341,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.8);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.85);
             cursor: pointer;
             font-size: 12px;
-            transform: translate(-14px, -14px);
           ">
             ${iconEmoji}
           </div>
@@ -292,7 +352,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         iconAnchor: [14, 14]
       });
 
-      const marker = L.marker([spot.lat, spot.lng], { icon: spotIcon });
+      const marker = L.marker([spot.lat, spot.lng], { icon: spotIcon, zIndexOffset: 200 });
       
       marker.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
@@ -313,63 +373,15 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div style="font-size: 10px; color: #334155; margin-top: 2px;">
             ${spot.locationType}
           </div>
+          <div style="font-size: 10px; color: #64748b; font-family: monospace; margin-top: 2px;">
+            ${spot.lat.toFixed(4)}°N, ${spot.lng.toFixed(4)}°E
+          </div>
         </div>
       `);
 
       marker.addTo(spotsGroup);
     });
   }, [filteredSpots]);
-
-  // 3. Render and update Heatmap / Model Activity Layer
-  useEffect(() => {
-    if (!mapInstanceRef.current || !heatLayerGroupRef.current) return;
-    const heatGroup = heatLayerGroupRef.current;
-    heatGroup.clearLayers();
-
-    if (!isHeatmapActive) return;
-
-    // Draw localized radial activity intensity around spots based on selected fish model score
-    VERIFIED_COASTAL_SPOTS.forEach((spot) => {
-      const isTargetSpecies = spot.commonTargetSpecies.includes(selectedFish.name);
-      const baseScore = selectedFish.currentScore;
-      const relativeIntensity = isTargetSpecies ? Math.min(100, baseScore + 10) : Math.max(30, baseScore - 20);
-
-      // Gradient color based on activity score
-      const color = relativeIntensity >= 85 
-        ? '#ef4444' // Hot Red
-        : relativeIntensity >= 70 
-        ? '#f59e0b' // Amber
-        : '#06b6d4'; // Cyan
-
-      // Outer soft radial dispersion circle (~1400m)
-      L.circle([spot.lat, spot.lng], {
-        radius: 1400,
-        color: 'transparent',
-        fillColor: color,
-        fillOpacity: 0.12,
-        interactive: false
-      }).addTo(heatGroup);
-
-      // Mid intensity circle (~700m)
-      L.circle([spot.lat, spot.lng], {
-        radius: 700,
-        color: 'transparent',
-        fillColor: color,
-        fillOpacity: 0.22,
-        interactive: false
-      }).addTo(heatGroup);
-
-      // Core hot spot circle (~300m)
-      L.circle([spot.lat, spot.lng], {
-        radius: 300,
-        color: color,
-        weight: 1,
-        fillColor: color,
-        fillOpacity: 0.38,
-        interactive: false
-      }).addTo(heatGroup);
-    });
-  }, [isHeatmapActive, selectedFish]);
 
   // 4. Move target pin seamlessly when selectedCoord changes
   useEffect(() => {
@@ -403,7 +415,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       return;
     }
 
-    // Check browser support
     if (!navigator.geolocation) {
       setGeoErrorMsg('Tarayıcınız konum servisini (Geolocation API) desteklemiyor.');
       return;
@@ -431,7 +442,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             const userIcon = createUserLocationIcon();
             const marker = L.marker([latitude, longitude], { 
               icon: userIcon, 
-              zIndexOffset: 2000 
+              zIndexOffset: 2500 
             }).addTo(map);
             marker.bindPopup(`
               <div style="font-size: 11px; line-height: 1.4;">
@@ -594,9 +605,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         </div>
       </div>
 
-      {/* Real Interactive Leaflet Map Container with Clean OpenStreetMap Tiles */}
+      {/* Real Interactive Leaflet Map Container */}
       <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
-        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[400px]'
+        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[410px]'
       }`}>
         
         {/* Leaflet Mount Target */}
@@ -667,7 +678,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             title={isLocating ? 'Konum takibi aktif (Tıklayarak odaklanın veya kapatın)' : 'Konumumu Haritada Göster'}
           >
             <Navigation className={`w-3 h-3 ${isLocating ? 'fill-white animate-pulse' : 'text-cyan-400'}`} />
-            <span>{isLocating ? 'Konumum' : 'Konumum'}</span>
+            <span>Konumum</span>
           </button>
 
           {/* 3. Follow Me Toggle (Only visible when location is active) */}
@@ -685,18 +696,19 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             </button>
           )}
 
-          {/* 4. Heatmap Toggle (Isı Haritası) */}
+          {/* 4. REAL NASA GIBS Satellite Sea Surface Temperature (SST) Layer Toggle */}
           <button
-            onClick={() => setIsHeatmapActive(!isHeatmapActive)}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
-              isHeatmapActive
-                ? 'bg-amber-600 text-white border-amber-400 shadow-amber-500/20'
-                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-amber-400'
+            onClick={() => setIsSstActive(!isSstActive)}
+            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md backdrop-blur-md border transition ${
+              isSstActive
+                ? 'bg-rose-600 text-white border-rose-400 shadow-rose-500/25 ring-2 ring-rose-500/20'
+                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-rose-400'
             }`}
-            title="Model Balık Aktivitesi Isı Katmanı (Model tahmini)"
+            title="NASA GIBS Gerçek Deniz Yüzeyi Sıcaklığı (SST) Uydu Termal Katmanı"
           >
-            <Flame className={`w-3 h-3 ${isHeatmapActive ? 'fill-white text-white' : 'text-amber-400'}`} />
-            <span>{isHeatmapActive ? 'Isı Katmanı' : 'Isı Katmanı'}</span>
+            <Thermometer className={`w-3 h-3 ${isSstActive ? 'text-white' : 'text-rose-400'}`} />
+            <span>{isSstActive ? 'Deniz Sıcaklığı (NASA)' : 'Deniz Sıcaklığı'}</span>
+            {sstLoading && <RefreshCw className="w-2.5 h-2.5 animate-spin text-white" />}
           </button>
         </div>
 
@@ -818,13 +830,53 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Heatmap Active Transparent Notice Banner */}
-        {isHeatmapActive && (
-          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-            <div className="px-3 py-1 rounded-full bg-amber-950/90 border border-amber-500/50 text-[10px] text-amber-300 backdrop-blur-md shadow-lg flex items-center gap-1.5">
-              <Flame className="w-3 h-3 text-amber-400 fill-amber-400" />
-              <span>Model Tahmin Katmanı: {selectedFish.name} için mevsimsel aktivite dağılımı (Gerçek gözlem değildir)</span>
+        {/* Real NASA Satellite SST Layer Control Panel (When Active) */}
+        {isSstActive && (
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-30 p-2.5 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1">
+              <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
+                <Thermometer className="w-3.5 h-3.5 text-rose-400" />
+                <span>NASA GIBS Deniz Sıcaklığı (SST)</span>
+              </div>
+              <span className="text-[9px] font-mono text-slate-400">GHRSST MUR L4 · 1 km</span>
             </div>
+
+            <div className="flex items-center justify-between text-[10px] text-slate-300">
+              <span className="text-slate-400">Termal Saydamlık:</span>
+              <div className="flex items-center gap-1">
+                {([0.45, 0.65, 0.85] as const).map((op) => (
+                  <button
+                    key={op}
+                    onClick={() => setSstOpacity(op)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
+                      sstOpacity === op ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    %{Math.round(op * 100)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Thermal Palette Legend (Traffic-map style gradient) */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between text-[9px] text-slate-400 font-mono">
+                <span>Daha Soğuk (Mavi/Yeşil)</span>
+                <span>Daha Sıcak (Sarı/Kırmızı)</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
+            </div>
+
+            <div className="text-[9px] text-slate-400 leading-tight">
+              <strong>Bilimsel Veri:</strong> NASA/JPL uyduları günlük deniz yüzeyi sıcaklık analizidir (20-21 Ekim 2026). Balık biyokütlesi veya anlık av garantisi değildir.
+            </div>
+
+            {sstError && (
+              <div className="text-[9px] text-amber-300 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                <span>{sstError}</span>
+              </div>
+            )}
           </div>
         )}
 
