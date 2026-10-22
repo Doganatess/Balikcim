@@ -8,9 +8,9 @@ export type CoastalLocationType =
   | 'Karasal Alan';
 
 export type SpotVerificationStatus = 
-  | 'DOGRULANMIS_KIYI_YAPISI'    // Fiziki liman/mendirek harita ve uydu katmanında teyitli
-  | 'COGRAFI_REFERANS_NOKTASI'  // Doğal coğrafi nokta (burun/nehir); avlak durumu sahada kontrol edilmeli
-  | 'KONUMU_KONTROL_EDILMELI';  // Geniş bölge veya kesinleştirilmemiş nokta
+  | 'FIZIKI_YAPI_TEYITLI'        // Yalnızca fiziki liman/mendirek yapısının haritada varlığı teyitlidir
+  | 'COGRAFI_REFERANS_NOKTASI'   // Yalnızca doğal coğrafi oluşumun konumu teyitlidir
+  | 'GENIS_HAT_TEYITSIZ';        // Geniş hat; tekil mera teyitsizdir
 
 export interface VerifiedCoastalSpot {
   id: string;
@@ -37,7 +37,7 @@ export const SAMSUN_ORDU_BOUNDS: [[number, number], [number, number]] = [
 
 export const SAMSUN_ORDU_CENTER: [number, number] = [41.15, 37.15];
 
-// Realistic high-resolution coastline polyline points [lat, lng] along Black Sea coast
+// Yaklaşık, elle tanımlanmış kıyı referans çizgisi (Resmî harita veya tescilli kıyı kenar çizgisi değildir)
 // Traced sequentially from West (Samsun Taflan) to East (Ordu-Giresun border)
 export const SAMSUN_ORDU_COASTLINE: [number, number][] = [
   [41.3650, 36.1800], // Samsun Taflan
@@ -79,7 +79,8 @@ export const SAMSUN_ORDU_COASTLINE: [number, number][] = [
   [40.9580, 38.1500]  // Ordu-Giresun sınırı
 ];
 
-// Verified coastal spots with checked GPS coordinates and transparent verification status
+// Avlak noktaları: Doğrulama YALNIZCA fiziki kıyı yapısının haritada varlığı ile sınırlıdır.
+// Balık verimi, derinlik veya güvenlik doğrulanmamıştır.
 export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
   {
     id: 'samsun-baruthane',
@@ -89,12 +90,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 41.3142,
     lng: 36.3195,
     locationType: 'Mendirek / Taş Tahkimat',
-    verificationStatus: 'DOGRULANMIS_KIYI_YAPISI',
-    verificationBadge: 'Doğrulanmış Kıyı Yapısı (Mendirek)',
-    verificationNote: 'Samsun Batı Park taş tahkimat mendireği harita katmanlarında fiziki yapı olarak teyit edilmiştir.',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Mendirek)',
+    verificationNote: 'Yalnızca taş blok mendirek yapısının harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, su derinliği ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Karadeniz\'e uzanan yapay taş blok mendirek yapısı',
     commonTargetSpecies: ['İstavrit', 'Çinekop', 'Lüfer', 'Mezgit'],
-    depthStatus: 'Resmi hidrografik batimetri ölçüm verisi bulunmamaktadır.',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Kayalık ve yosunlu taş zemin; kayma riski. Akıntılı havalarda dip takımı takılabilir.'
   },
   {
@@ -106,12 +107,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lng: 36.3620,
     locationType: 'Nehir / Dere Ağzı',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Coğrafi Nokta (Avlak Durumu Kontrol Edilmeli)',
-    verificationNote: 'Mert Irmağı ağzı coğrafi olarak doğrulanmıştır; kum bankı ve dere debisi dönemsel değişir.',
+    verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
+    verificationNote: 'Yalnızca Mert Irmağı ağzının coğrafi konumu teyitlidir. Balık verimi, su derinliği, kum bankı değişkenliği ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Mert Irmağı\'nın Karadeniz ile buluştuğu kumsal alüvyon sahil',
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kefal', 'Kalkan'],
-    depthStatus: 'Ölçüm verisi yok (Kıyı sığ, dere debisine göre kum tepecikleri değişir).',
-    cautions: 'Yağmur sonrası bulanık su; dip akıntısı ve sığ kum bankları.'
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Yağmur sonrası bulanık su; dip akıntısı ve değişken sığ kum bankları.'
   },
   {
     id: 'carsamba-sahil',
@@ -121,12 +122,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 41.2465,
     lng: 36.7210,
     locationType: 'Kumsal / Plaj Şeridi',
-    verificationStatus: 'KONUMU_KONTROL_EDILMELI',
-    verificationBadge: 'Geniş Kıyı Bölgesi (Konumu Kontrol Edilmeli)',
-    verificationNote: 'Yeşilırmak deltası boyunca uzanan geniş sahil bandıdır; sabit tekil bir mera noktası değildir.',
+    verificationStatus: 'GENIS_HAT_TEYITSIZ',
+    verificationBadge: 'Geniş Kıyı Hattı (Avlak Teyitsiz)',
+    verificationNote: 'Yeşilırmak deltası boyunca uzanan geniş sahil bandıdır; sabit tekil bir avlak noktası değildir. Balık verimi, derinlik ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Yeşilırmak delta ovası geniş kumul sahil bandı',
     commonTargetSpecies: ['Kalkan', 'Mırmır', 'Minekop', 'Levrek'],
-    depthStatus: 'Resmi batimetri ölçüm verisi bulunmamaktadır (Sığ eğimli kumsal).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Geniş kumluk kıyı; dip takımı ve surf kamış gerektirir. Çeken akıntı (rip) riski.'
   },
   {
@@ -138,11 +139,11 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lng: 37.0345,
     locationType: 'Kumsal / Plaj Şeridi',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Coğrafi Nokta (Kumsal Kıyı)',
-    verificationNote: 'Miliç Çamlığı sahili coğrafi olarak doğrulanmıştır; sığ kumluk kıyı yapısına sahiptir.',
+    verificationBadge: 'Coğrafi Referans Noktası (Kumsal Kıyı)',
+    verificationNote: 'Yalnızca Miliç Çamlığı sahilinin coğrafi konumu teyitlidir. Balık verimi, derinlik ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Miliç Çamı orman kenarı kumsal kıyı hattı',
     commonTargetSpecies: ['Kalkan', 'Levrek', 'Minekop'],
-    depthStatus: 'Ölçüm verisi yok; kıyıdan ilk 50 metrede sığ derinlik hakimdir.',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Kuzey rüzgarlarında yüksek dalga ve kıyı köpüklenmesi.'
   },
   {
@@ -153,12 +154,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 41.1345,
     lng: 37.2885,
     locationType: 'Mendirek / Taş Tahkimat',
-    verificationStatus: 'DOGRULANMIS_KIYI_YAPISI',
-    verificationBadge: 'Doğrulanmış Kıyı Yapısı (Liman / Mendirek)',
-    verificationNote: 'Ünye Limanı dış mendireği ve feneri harita katmanlarında fiziki yapı olarak teyit edilmiştir.',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Liman / Mendirek)',
+    verificationNote: 'Yalnızca Ünye Limanı dış mendireği ve fenerinin harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Ünye Limanı dış mendireği ve açık deniz taş dolgusu',
     commonTargetSpecies: ['Çinekop', 'Lüfer', 'İstavrit', 'Palamut', 'Minekop'],
-    depthStatus: 'Resmi batimetri ölçüm verisi bulunmamaktadır (Mendirek dışı derin su eğilimli).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Açık deniz tarafında sert Karadeniz çalkantısı ve rüzgar.'
   },
   {
@@ -170,11 +171,11 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lng: 37.2690,
     locationType: 'Doğal Kayalık Burun',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Doğrulanmış Coğrafi Burun (Doğal Kayalık)',
-    verificationNote: 'Ünye Çamlık falez ve burun hattı coğrafi olarak doğrulanmıştır; kayalık avlak yapısıdır.',
+    verificationBadge: 'Coğrafi Referans Noktası (Doğal Kayalık)',
+    verificationNote: 'Yalnızca Çamlık falez ve kayalık burun hattının coğrafi konumu teyitlidir. Balık verimi, su derinliği ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Falez ve doğal volkanik kayalık burun sahil şeridi',
     commonTargetSpecies: ['Levrek', 'İstavrit', 'Eşkina', 'Karagöz'],
-    depthStatus: 'Ölçüm verisi yok; kayalık önü kademeli kırık taş zemindir.',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Sarp kayalık zemin; sahte yem takılma riski yüksek (LRF ve spin tercih edilir).'
   },
   {
@@ -185,12 +186,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 41.0315,
     lng: 37.5020,
     locationType: 'Liman / Barınak İçi',
-    verificationStatus: 'DOGRULANMIS_KIYI_YAPISI',
-    verificationBadge: 'Doğrulanmış Kıyı Yapısı (Liman / Mendirek)',
-    verificationNote: 'Fatsa Balıkçı Barınağı mendireği fiziki yapı olarak harita katmanlarında teyit edilmiştir.',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Barınak / Mendirek)',
+    verificationNote: 'Yalnızca Fatsa Balıkçı Barınağı mendirek yapısının harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Fatsa Körfezi mendireği ve korunaklı iç liman',
     commonTargetSpecies: ['İstavrit', 'Minekop', 'Palamut', 'Kefal'],
-    depthStatus: 'Ölçüm verisi yok (İç liman 4-8m, mendirek açığı daha derin).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Tekne trafiği olan kanallara olta atmayınız.'
   },
   {
@@ -202,11 +203,11 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lng: 37.6830,
     locationType: 'Doğal Kayalık Burun',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Doğrulanmış Coğrafi Burun (Doğal Kayalık)',
-    verificationNote: 'Yason Burnu doğal kıyı çıkıntısı tescilli coğrafi noktadır; akıntı ve dalga değişkenlik gösterir.',
+    verificationBadge: 'Coğrafi Referans Noktası (Doğal Burun)',
+    verificationNote: 'Yalnızca Yason Burnu doğal kara çıkıntısının coğrafi konumu teyitlidir. Balık verimi, su altı derinliği, akıntı şiddeti ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Karadeniz\'e dik uzanan tarihi Yason Burnu doğal kaya dili',
     commonTargetSpecies: ['Lüfer', 'Palamut', 'Levrek', 'İstavrit'],
-    depthStatus: 'Ölçüm verisi yok (Burun ucunda güçlü akıntı ve aniden derinleşen yapı).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Şiddetli burun akıntısı ve ters dalga; kayalık üzerinde dikkatli olunmalı.'
   },
   {
@@ -217,12 +218,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 41.0665,
     lng: 37.7680,
     locationType: 'Liman / Barınak İçi',
-    verificationStatus: 'DOGRULANMIS_KIYI_YAPISI',
-    verificationBadge: 'Doğrulanmış Kıyı Yapısı (Liman)',
-    verificationNote: 'Perşembe Vona Limanı rıhtım ve korunaklı havuz yapısı fiziki olarak teyit edilmiştir.',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Liman / Rıhtım)',
+    verificationNote: 'Yalnızca Perşembe Vona Limanı rıhtım ve mendirek yapısının harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Doğal korunaklı derin Vona koyu ve balıkçı rıhtımı',
     commonTargetSpecies: ['Eşkina', 'İstavrit', 'Karagöz', 'Mezgit'],
-    depthStatus: 'Ölçüm verisi yok (Doğal derin koy yapısı).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Gece avında aydınlatma gerekir. Rıhtım kenarları yosunlu olabilir.'
   },
   {
@@ -233,12 +234,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lat: 40.9880,
     lng: 37.8765,
     locationType: 'Mendirek / Taş Tahkimat',
-    verificationStatus: 'DOGRULANMIS_KIYI_YAPISI',
-    verificationBadge: 'Doğrulanmış Rıhtım / Taş Dolgu Yapısı',
-    verificationNote: 'Altınordu Taşbaşı sahil dolgusu ve rıhtım hattı doğrulanmış fiziki kıyı yapısıdır.',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Rıhtım / Dolgu)',
+    verificationNote: 'Yalnızca Altınordu Taşbaşı sahil dolgusu ve rıhtım yapısının harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik durumu doğrulanmamıştır.',
     verifiedGeoFeature: 'Altınordu sahil dolgusu ve Taşbaşı kayalık hattı',
     commonTargetSpecies: ['İstavrit', 'Çinekop', 'Lüfer', 'Minekop'],
-    depthStatus: 'Ölçüm verisi yok (Kıyı taş dolgu önü 6-14m tahmini).',
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Halk yürüyüş yolu üzeri; atış esnasında arkadaki yayalara dikkat edilmeli.'
   },
   {
@@ -250,12 +251,12 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     lng: 37.9350,
     locationType: 'Nehir / Dere Ağzı',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Coğrafi Nokta (Avlak Durumu Kontrol Edilmeli)',
-    verificationNote: 'Melet Irmağı ağzı coğrafi olarak teyit edilmiştir; dere yatağı akıntısı sahada kontrol edilmelidir.',
+    verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
+    verificationNote: 'Yalnızca Melet Irmağı ağzının coğrafi konumu teyitlidir. Balık verimi, derinlik, taban akıntısı ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Melet Irmağı\'nın denize karıştığı çakıl ve kumsal hat',
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kalkan', 'Kefal'],
-    depthStatus: 'Ölçüm verisi yok; alüvyon yataklı değişken sığlık.',
-    cautions: 'Irmak akıntısı ve çakıllı zemin.'
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Irmak akıntısı ve çakıllı değişken zemin.'
   }
 ];
 
@@ -290,7 +291,7 @@ function distanceToSegmentKm(
   const dy = py - projY;
   const distanceKm = Math.sqrt(dx * dx + dy * dy);
 
-  // 2D cross product: (B - A) x (P - A). Positive = left/North of coast (Sea in Black Sea sector)
+  // 2D cross product: (B - A) x (P - A). Positive = North of coast (Sea in Black Sea sector)
   const crossProduct = bx * py - by * px;
 
   return { distanceKm, crossProduct };
@@ -307,12 +308,12 @@ export interface PointClassificationResult {
   dataNotice: string;
 }
 
-// Geometric coast classification using the 37-segment Samsun-Ordu coastal polyline
+// Geometric coast classification using the 37-segment approximate reference polyline
 export function classifyPointGeography(lat: number, lng: number): PointClassificationResult {
   // Check bounds: roughly 36.15 to 38.20 lng, 40.85 to 41.50 lat
   const isWithinBounds = lng >= 36.15 && lng <= 38.20 && lat >= 40.85 && lat <= 41.50;
 
-  // Find nearest verified spot
+  // Find nearest spot
   let nearestSpot: VerifiedCoastalSpot | null = null;
   let minSpotDistanceKm = Infinity;
 
@@ -333,10 +334,10 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
       zoneType: 'kapsam_disi',
       isWithinBounds: false,
       distanceToCoastKm: null,
-      description: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.15°D - 38.20°D) dışındadır. Bu alan için kıyı geometrisi tahmini yapılmamaktadır.',
+      description: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.15°D - 38.20°D) dışındadır. Bu alan için kıyı referans çizgisi bulunmamaktadır.',
       nearestSpot: null,
       distanceToNearestSpotKm: null,
-      dataNotice: 'Koordinat çalışma alanı dışındadır; tahmin uydurulmaz.'
+      dataNotice: 'Koordinat çalışma alanı dışındadır; tahmin yapılmamaktadır.'
     };
   }
 
@@ -357,7 +358,7 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
 
   const roundedCoastDistKm = Math.round(minCoastDistKm * 100) / 100;
   const roundedSpotDistKm = Math.round(minSpotDistanceKm * 10) / 10;
-  const dataNotice = 'Yaklaşık kıyı referans poligonu (37 segment) kullanılarak hesaplanmıştır. Resmi kadastro kıyı kenar çizgisi yerine geçmez.';
+  const dataNotice = 'Yaklaşık, elle tanımlanmış kıyı referans çizgisi (37 segment) kullanılarak hesaplanmıştır. Resmî veya doğrulanmış kıyı geometrisi değildir; 450 metre sınırı yaklaşık bir sınıflandırma eşiğidir.';
 
   // Within 450 meters (0.45 km) of reference coastline = Coastal Strip
   if (minCoastDistKm <= 0.45) {
@@ -366,7 +367,7 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
       zoneType: 'kiyi',
       isWithinBounds: true,
       distanceToCoastKm: roundedCoastDistKm,
-      description: `Seçilen koordinat Karadeniz kıyı çizgisine ~${Math.round(minCoastDistKm * 1000)} metre mesafede sahil bandındadır. Kıyıdan olta balıkçılığı (spin, LRF, yemli kıyı takımı) için kıyı sahasıdır.`,
+      description: `Seçilen koordinat elle tanımlanmış kıyı referans çizgisine ~${Math.round(minCoastDistKm * 1000)} metre mesafededir (yaklaşık sınıflandırma eşiği: 450 m). Resmî veya doğrulanmış kıyı kenar çizgisi değildir.`,
       nearestSpot,
       distanceToNearestSpotKm: roundedSpotDistKm,
       dataNotice
@@ -380,7 +381,7 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
       zoneType: 'deniz',
       isWithinBounds: true,
       distanceToCoastKm: roundedCoastDistKm,
-      description: `Seçilen nokta kıyı hattının ~${roundedCoastDistKm} km kuzeyinde, açık deniz su sahasındadır. Yalnızca tekne veya bot ile ulaşılabilir.`,
+      description: `Seçilen nokta elle tanımlanmış kıyı referans çizgisinin ~${roundedCoastDistKm} km kuzeyinde açık deniz sahasındadır. Yalnızca tekne veya bot ile ulaşılabilir.`,
       nearestSpot: minSpotDistanceKm <= 3.5 ? nearestSpot : null,
       distanceToNearestSpotKm: minSpotDistanceKm <= 3.5 ? roundedSpotDistKm : null,
       dataNotice
@@ -393,7 +394,7 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
     zoneType: 'kara',
     isWithinBounds: true,
     distanceToCoastKm: roundedCoastDistKm,
-    description: `Seçilen nokta kıyı çizgisinin ~${roundedCoastDistKm} km güneyinde, karasal alanda kalmaktadır. Deniz balıkçılığı için kıyı şeridine veya liman bölgesine yaklaşınız.`,
+    description: `Seçilen nokta elle tanımlanmış kıyı referans çizgisinin ~${roundedCoastDistKm} km güneyinde karasal alandadır. Deniz kıyısına veya liman bölgesine yaklaşınız.`,
     nearestSpot: minSpotDistanceKm <= 3.0 ? nearestSpot : null,
     distanceToNearestSpotKm: minSpotDistanceKm <= 3.0 ? roundedSpotDistKm : null,
     dataNotice

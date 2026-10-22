@@ -47,8 +47,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTileLayer, setActiveTileLayer] = useState<'osm' | 'dark'>('dark');
 
-  // Currently selected point (either a verified spot or tapped coordinate)
-  // Default to Ünye Liman Mendireği (well-documented geographic feature)
+  // Currently selected point (either a spot or tapped coordinate)
+  // Default to Ünye Liman Mendireği
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
     lat: 41.1345,
     lng: 37.2885
@@ -72,7 +72,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         minZoom: 8,
         maxZoom: 18,
         maxBounds: [
-          [40.50, 35.70], // Hard limits around Samsun-Ordu coastal sector
+          [40.50, 35.70],
           [41.80, 38.60]
         ],
         zoomControl: false,
@@ -110,7 +110,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       VERIFIED_COASTAL_SPOTS.forEach((spot) => {
         const isLiman = spot.locationType.includes('Mendirek') || spot.locationType.includes('Liman');
         const isKaya = spot.locationType.includes('Kayalık');
-        const isUnverified = spot.verificationStatus === 'KONUMU_KONTROL_EDILMELI';
+        const isUnverified = spot.verificationStatus === 'GENIS_HAT_TEYITSIZ';
         
         const iconColor = isUnverified 
           ? '#eab308' 
@@ -164,7 +164,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               ${spot.verificationBadge}
             </div>
             <div style="font-size: 10px; color: #cbd5e1; margin-top: 2px;">
-              Tür: ${spot.locationType}
+              ${spot.locationType}
             </div>
           </div>
         `);
@@ -183,9 +183,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       // Click on any free area on map: Updates coordinates and CLEARS previous spot
       map.on('click', (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
-        // Strictly sync state: red pin, panel coordinates and clear previous spot
         setSelectedCoord({ lat, lng });
-        setSelectedSpot(null); // Clear previous spot name!
+        setSelectedSpot(null); // Clear previous spot name
       });
 
       mapInstanceRef.current = map;
@@ -227,7 +226,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     });
 
     newTileLayer.addTo(map);
-    // Send tile layer to back so spot markers and pin stay on top
     newTileLayer.bringToBack();
     tileLayerRef.current = newTileLayer;
   }, [activeTileLayer]);
@@ -239,7 +237,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
   }, [selectedCoord]);
 
-  // 4. Mobile resize & visibility watcher (handles tab switches & viewport adjustments)
+  // 4. Mobile resize & visibility watcher
   useEffect(() => {
     const handleResize = () => {
       if (mapInstanceRef.current) {
@@ -457,7 +455,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
         </div>
 
-        {/* Bottom-Right Honest Safety Status Indicator (Replaced unconditional "Güvenli" badge) */}
+        {/* Bottom-Right Honest Safety Status Indicator */}
         <div className="absolute bottom-2.5 right-3 z-20">
           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/95 text-amber-300 font-medium text-[10px] shadow-md border border-amber-500/40 backdrop-blur-md">
             <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
@@ -485,7 +483,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 {/* Spot Verification Badge or Coordinate Pill */}
                 {selectedSpot ? (
                   <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                    selectedSpot.verificationStatus === 'DOGRULANMIS_KIYI_YAPISI'
+                    selectedSpot.verificationStatus === 'FIZIKI_YAPI_TEYITLI'
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                       : selectedSpot.verificationStatus === 'COGRAFI_REFERANS_NOKTASI'
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -501,11 +499,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </div>
 
               {/* Exact Synchronized Coordinate Display */}
-              <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-2 mt-0.5">
+              <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-2 mt-0.5 flex-wrap">
                 <span>{selectedCoord.lat.toFixed(4)}° N, {selectedCoord.lng.toFixed(4)}° E</span>
                 {geoAnalysis.distanceToCoastKm !== null && (
-                  <span className="text-[10px] text-slate-400">
-                    (Kıyıya ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`})
+                  <span className="text-[10px] text-slate-400 font-sans">
+                    (Referans çizgisine ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`}; eşik: ~450 m)
                   </span>
                 )}
               </div>
@@ -530,22 +528,31 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
         {/* Verification Note (if a spot is selected) or Nearest Reference Point (if free tapped point) */}
         {selectedSpot ? (
-          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
-            <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Avlak Doğrulama Durumu:</div>
+          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
+            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
+              <span>Konum Teyit Kapsamı:</span>
+              <span className="text-slate-500">Yalnızca Fiziki Varlık</span>
+            </div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{selectedSpot.verificationNote}</p>
+            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
+              <strong>Önemli:</strong> Teyit yalnızca haritadaki fiziki kıyı yapısının veya coğrafi noktanın varlığı ile sınırlıdır; balık verimi, derinlik ve güvenlik durumunu kapsamaz.
+            </div>
             {selectedSpot.cautions && (
-              <p className="text-amber-400/90 text-[10px] mt-1 flex items-start gap-1">
+              <p className="text-amber-400/90 text-[10px] pt-0.5 flex items-start gap-1">
                 <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
                 <span>{selectedSpot.cautions}</span>
               </p>
             )}
           </div>
         ) : (
-          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
+            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
+              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı çizgisi değildir.
+            </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
-              <p className="text-cyan-400 text-[10px] mt-1 flex items-center gap-1">
+              <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
                 <MapPin className="w-3 h-3 shrink-0" />
                 <span>En yakın kayıtlı nokta: <strong>{geoAnalysis.nearestSpot.name}</strong> (~{geoAnalysis.distanceToNearestSpotKm} km)</span>
               </p>
@@ -572,10 +579,10 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <span className="text-slate-400 text-[10px] font-semibold">Batimetri (Derinlik) & Atış Analizi:</span>
             <div className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
               <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
-              <span>Resmi batimetri / derinlik sensörü bulunmamaktadır</span>
+              <span>{selectedSpot ? selectedSpot.depthStatus : 'Doğrulanmış batimetri ölçümü bulunmuyor'}</span>
             </div>
             <div className="text-[10px] text-slate-400 leading-tight">
-              Ölçülmüş sualtı derinlik haritası olmadan atış mesafesi önerisi (örn. "100m atış yap") üretilmez. Kumsalda balık olmayacağı veya kayalıkta kesin av yapılacağı iddia edilemez.
+              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiyesi üretilmez.
             </div>
           </div>
         </div>
@@ -607,7 +614,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         {/* Cautions, Safety & Data Source Attribution */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
           <div>
-            <strong>Harita Kaynağı:</strong> {activeTileLayer === 'dark' ? 'CartoDB Voyager' : 'OpenStreetMap'} · WGS84 Koordinat Sistemi
+            <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi (Eşik: ~450 m; resmî kadastro verisi değildir)
           </div>
           <div className="text-amber-400/90 font-mono">
             ⚠ Canlı rüzgâr/dalga sensörü bağlı değildir. Güvenlik için yerel hava durumunu kontrol ediniz.
