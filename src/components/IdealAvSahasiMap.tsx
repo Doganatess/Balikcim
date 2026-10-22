@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import { 
   Crosshair, 
@@ -8,7 +8,11 @@ import {
   X, 
   AlertCircle, 
   RotateCcw,
-  HelpCircle
+  HelpCircle,
+  Navigation,
+  Flame,
+  Filter,
+  Check
 } from 'lucide-react';
 import { Region } from '../data/regionsData';
 import { FishSpecies, FISH_CATALOG } from '../data/fishData';
@@ -37,23 +41,59 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const selectedMarkerRef = useRef<L.Marker | null>(null);
   const spotsLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const heatLayerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  // User location tracking refs & states
+  const watchIdRef = useRef<number | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
+  const userAccuracyCircleRef = useRef<L.Circle | null>(null);
 
   const [fishDropdownOpen, setFishDropdownOpen] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Geolocation states
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [geoErrorMsg, setGeoErrorMsg] = useState<string | null>(null);
+  const [isUserOutsideRegion, setIsUserOutsideRegion] = useState(false);
+
+  // Heatmap toggle
+  const [isHeatmapActive, setIsHeatmapActive] = useState(false);
+
+  // Mera filtering states
+  const [cityFilter, setCityFilter] = useState<'Tümü' | 'Samsun' | 'Ordu'>('Tümü');
+  const [typeFilter, setTypeFilter] = useState<'Tümü' | 'Mendirek/Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı'>('Tümü');
+  const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'FIZIKI_YAPI_TEYITLI' | 'COGRAFI_REFERANS_NOKTASI'>('Tümü');
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+
   // Currently selected point (either a spot or tapped coordinate)
-  // Default to Ünye Liman Mendireği
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
     lat: 41.1345,
     lng: 37.2885
   });
 
   const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(
-    VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[4]
+    VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[17]
   );
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
+
+  // Filtered spots based on user selection
+  const filteredSpots = useMemo(() => {
+    return VERIFIED_COASTAL_SPOTS.filter(spot => {
+      if (cityFilter !== 'Tümü' && spot.city !== cityFilter) return false;
+      if (verificationFilter !== 'Tümü' && spot.verificationStatus !== verificationFilter) return false;
+      if (typeFilter !== 'Tümü') {
+        if (typeFilter === 'Mendirek/Liman' && !spot.locationType.includes('Mendirek') && !spot.locationType.includes('Liman')) return false;
+        if (typeFilter === 'Kayalık' && !spot.locationType.includes('Kayalık')) return false;
+        if (typeFilter === 'Kumsal' && !spot.locationType.includes('Kumsal') && !spot.locationType.includes('Plaj')) return false;
+        if (typeFilter === 'Dere Ağzı' && !spot.locationType.includes('Dere') && !spot.locationType.includes('Nehir')) return false;
+      }
+      return true;
+    });
+  }, [cityFilter, typeFilter, verificationFilter]);
 
   // Helper for red target pin icon
   const createPinIcon = useCallback((): L.DivIcon => {
@@ -97,21 +137,48 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     });
   }, []);
 
-  // 1. Initial Leaflet Map Setup (Runs ONCE on mount with OpenStreetMap)
+  // Helper for user blue pulsating location icon
+  const createUserLocationIcon = useCallback((): L.DivIcon => {
+    return L.divIcon({
+      className: 'custom-user-location-pin',
+      html: `
+        <div style="position: relative; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
+          <div style="
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: rgba(14, 165, 233, 0.35);
+            border-radius: 50%;
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+          "></div>
+          <div style="
+            width: 14px;
+            height: 14px;
+            background: #0284c7;
+            border: 2.5px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.8);
+            z-index: 2;
+          "></div>
+        </div>
+      `,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+  }, []);
+
+  // 1. Initial Leaflet Map Setup (Runs ONCE on mount)
   useEffect(() => {
     if (!mapContainerRef.current) return;
-    if (mapInstanceRef.current) return; // Prevent double initialization
+    if (mapInstanceRef.current) return;
 
     try {
+      // Relaxed maxBounds so users located anywhere can be shown safely
       const map = L.map(mapContainerRef.current, {
         center: SAMSUN_ORDU_CENTER,
         zoom: 10,
-        minZoom: 8,
+        minZoom: 6,
         maxZoom: 18,
-        maxBounds: [
-          [40.50, 35.70],
-          [41.80, 38.60]
-        ],
         zoomControl: false,
         attributionControl: true
       });
@@ -119,7 +186,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       // Zoom control in top-right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Stable, keyless OpenStreetMap tile layer (No CARTO or API key required)
+      // OpenStreetMap tile layer
       const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> Katkıda Bulunanlar',
         maxZoom: 19
@@ -127,81 +194,19 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       tileLayer.addTo(map);
       tileLayerRef.current = tileLayer;
 
-      // Fit to Samsun-Ordu coastal frame
+      // Fit to Samsun-Ordu coastal frame initially
       map.fitBounds(SAMSUN_ORDU_BOUNDS, {
         padding: [20, 20],
         maxZoom: 11
       });
 
-      // Layer group for spot markers
+      // Heatmap layer group
+      const heatGroup = L.layerGroup().addTo(map);
+      heatLayerGroupRef.current = heatGroup;
+
+      // Spots layer group
       const spotsGroup = L.layerGroup().addTo(map);
       spotsLayerGroupRef.current = spotsGroup;
-
-      // Add spot markers
-      VERIFIED_COASTAL_SPOTS.forEach((spot) => {
-        const isLiman = spot.locationType.includes('Mendirek') || spot.locationType.includes('Liman');
-        const isKaya = spot.locationType.includes('Kayalık');
-        const isUnverified = spot.verificationStatus === 'GENIS_HAT_TEYITSIZ';
-        
-        const iconColor = isUnverified 
-          ? '#eab308' 
-          : isLiman 
-          ? '#06b6d4' 
-          : isKaya 
-          ? '#f59e0b' 
-          : '#10b981';
-
-        const iconEmoji = isLiman ? '⚓' : isKaya ? '🪨' : '🏖️';
-
-        const spotIcon = L.divIcon({
-          className: 'custom-spot-marker',
-          html: `
-            <div style="
-              background: #091220;
-              border: 2px solid ${iconColor};
-              width: 30px;
-              height: 30px;
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-shadow: 0 3px 10px rgba(0,0,0,0.8);
-              cursor: pointer;
-              font-size: 13px;
-              transform: translate(-15px, -15px);
-            ">
-              ${iconEmoji}
-            </div>
-          `,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        const marker = L.marker([spot.lat, spot.lng], { icon: spotIcon });
-        
-        marker.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          setSelectedCoord({ lat: spot.lat, lng: spot.lng });
-          setSelectedSpot(spot);
-          map.panTo([spot.lat, spot.lng], { animate: true });
-        });
-
-        // Informative popup
-        marker.bindPopup(`
-          <div style="font-size: 12px; line-height: 1.45; font-family: system-ui, sans-serif;">
-            <div style="font-weight: 700; color: #0284c7;">${spot.name}</div>
-            <div style="color: #64748b; font-size: 11px;">${spot.city} (${spot.district})</div>
-            <div style="margin-top: 3px; font-weight: 600; color: ${iconColor}; font-size: 11px;">
-              ${spot.verificationBadge}
-            </div>
-            <div style="font-size: 10px; color: #334155; margin-top: 2px;">
-              ${spot.locationType}
-            </div>
-          </div>
-        `);
-
-        marker.addTo(spotsGroup);
-      });
 
       // Target selection Pin marker
       const initialPinIcon = createPinIcon();
@@ -211,20 +216,30 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       }).addTo(map);
       selectedMarkerRef.current = targetMarker;
 
-      // Click on any free area on map: Updates coordinates and CLEARS previous spot
+      // Map click handler: updates coordinates and CLEARS spot selection
       map.on('click', (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
         setSelectedCoord({ lat, lng });
-        setSelectedSpot(null); // Clear previous spot name
+        setSelectedSpot(null);
+      });
+
+      // If user drags map manually, disable auto-following so map doesn't fight the user
+      map.on('dragstart', () => {
+        setIsFollowingUser(false);
       });
 
       mapInstanceRef.current = map;
     } catch (err: any) {
       console.error('Leaflet initialization error:', err);
-      setMapError('Harita bileşeni yüklenemedi. Lütfen internet bağlantınızı kontrol edip sayfayı yenileyiniz.');
+      setMapError('Harita bileşeni yüklenemedi. Lütfen sayfayı yenileyiniz.');
     }
 
     return () => {
+      // Cleanup watchPosition
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -232,14 +247,262 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     };
   }, [createPinIcon]);
 
-  // 2. Move target pin seamlessly when selectedCoord changes
+  // 2. Render and update spot markers when filteredSpots changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || !spotsLayerGroupRef.current) return;
+    const spotsGroup = spotsLayerGroupRef.current;
+    spotsGroup.clearLayers();
+
+    filteredSpots.forEach((spot) => {
+      const isLiman = spot.locationType.includes('Mendirek') || spot.locationType.includes('Liman');
+      const isKaya = spot.locationType.includes('Kayalık');
+      const isUnverified = spot.verificationStatus === 'GENIS_HAT_TEYITSIZ';
+      
+      const iconColor = isUnverified 
+        ? '#eab308' 
+        : isLiman 
+        ? '#06b6d4' 
+        : isKaya 
+        ? '#f59e0b' 
+        : '#10b981';
+
+      const iconEmoji = isLiman ? '⚓' : isKaya ? '🪨' : spot.locationType.includes('Dere') ? '🌊' : '🏖️';
+
+      const spotIcon = L.divIcon({
+        className: 'custom-spot-marker',
+        html: `
+          <div style="
+            background: #091220;
+            border: 2px solid ${iconColor};
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.8);
+            cursor: pointer;
+            font-size: 12px;
+            transform: translate(-14px, -14px);
+          ">
+            ${iconEmoji}
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      const marker = L.marker([spot.lat, spot.lng], { icon: spotIcon });
+      
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        setSelectedCoord({ lat: spot.lat, lng: spot.lng });
+        setSelectedSpot(spot);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.panTo([spot.lat, spot.lng], { animate: true });
+        }
+      });
+
+      marker.bindPopup(`
+        <div style="font-size: 12px; line-height: 1.45; font-family: system-ui, sans-serif;">
+          <div style="font-weight: 700; color: #0284c7;">${spot.name}</div>
+          <div style="color: #64748b; font-size: 11px;">${spot.city} (${spot.district})</div>
+          <div style="margin-top: 3px; font-weight: 600; color: ${iconColor}; font-size: 11px;">
+            ${spot.verificationBadge}
+          </div>
+          <div style="font-size: 10px; color: #334155; margin-top: 2px;">
+            ${spot.locationType}
+          </div>
+        </div>
+      `);
+
+      marker.addTo(spotsGroup);
+    });
+  }, [filteredSpots]);
+
+  // 3. Render and update Heatmap / Model Activity Layer
+  useEffect(() => {
+    if (!mapInstanceRef.current || !heatLayerGroupRef.current) return;
+    const heatGroup = heatLayerGroupRef.current;
+    heatGroup.clearLayers();
+
+    if (!isHeatmapActive) return;
+
+    // Draw localized radial activity intensity around spots based on selected fish model score
+    VERIFIED_COASTAL_SPOTS.forEach((spot) => {
+      const isTargetSpecies = spot.commonTargetSpecies.includes(selectedFish.name);
+      const baseScore = selectedFish.currentScore;
+      const relativeIntensity = isTargetSpecies ? Math.min(100, baseScore + 10) : Math.max(30, baseScore - 20);
+
+      // Gradient color based on activity score
+      const color = relativeIntensity >= 85 
+        ? '#ef4444' // Hot Red
+        : relativeIntensity >= 70 
+        ? '#f59e0b' // Amber
+        : '#06b6d4'; // Cyan
+
+      // Outer soft radial dispersion circle (~1400m)
+      L.circle([spot.lat, spot.lng], {
+        radius: 1400,
+        color: 'transparent',
+        fillColor: color,
+        fillOpacity: 0.12,
+        interactive: false
+      }).addTo(heatGroup);
+
+      // Mid intensity circle (~700m)
+      L.circle([spot.lat, spot.lng], {
+        radius: 700,
+        color: 'transparent',
+        fillColor: color,
+        fillOpacity: 0.22,
+        interactive: false
+      }).addTo(heatGroup);
+
+      // Core hot spot circle (~300m)
+      L.circle([spot.lat, spot.lng], {
+        radius: 300,
+        color: color,
+        weight: 1,
+        fillColor: color,
+        fillOpacity: 0.38,
+        interactive: false
+      }).addTo(heatGroup);
+    });
+  }, [isHeatmapActive, selectedFish]);
+
+  // 4. Move target pin seamlessly when selectedCoord changes
   useEffect(() => {
     if (selectedMarkerRef.current) {
       selectedMarkerRef.current.setLatLng([selectedCoord.lat, selectedCoord.lng]);
     }
   }, [selectedCoord]);
 
-  // 3. Mobile resize & visibility watcher
+  // 5. Geolocation Tracker: Start / Stop Handler
+  const toggleLocationTracking = useCallback(() => {
+    setGeoErrorMsg(null);
+
+    // If currently tracking, stop it
+    if (isLocating) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
+      if (userAccuracyCircleRef.current) {
+        userAccuracyCircleRef.current.remove();
+        userAccuracyCircleRef.current = null;
+      }
+      setIsLocating(false);
+      setIsFollowingUser(false);
+      setUserCoords(null);
+      setIsUserOutsideRegion(false);
+      return;
+    }
+
+    // Check browser support
+    if (!navigator.geolocation) {
+      setGeoErrorMsg('Tarayıcınız konum servisini (Geolocation API) desteklemiyor.');
+      return;
+    }
+
+    setIsLocating(true);
+    setIsFollowingUser(true);
+
+    try {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          setUserCoords({ lat: latitude, lng: longitude, accuracy });
+          setGeoErrorMsg(null);
+
+          // Check if user is within Samsun - Ordu coastal sector
+          const isWithin = longitude >= 35.80 && longitude <= 38.30 && latitude >= 40.70 && latitude <= 41.60;
+          setIsUserOutsideRegion(!isWithin);
+
+          const map = mapInstanceRef.current;
+          if (!map) return;
+
+          // Draw or update blue user location icon
+          if (!userMarkerRef.current) {
+            const userIcon = createUserLocationIcon();
+            const marker = L.marker([latitude, longitude], { 
+              icon: userIcon, 
+              zIndexOffset: 2000 
+            }).addTo(map);
+            marker.bindPopup(`
+              <div style="font-size: 11px; line-height: 1.4;">
+                <strong style="color: #0284c7;">📍 Mevcut Konumunuz</strong><br/>
+                Hassasiyet: ±${Math.round(accuracy)}m
+              </div>
+            `);
+            userMarkerRef.current = marker;
+          } else {
+            userMarkerRef.current.setLatLng([latitude, longitude]);
+          }
+
+          // Draw or update accuracy radius circle
+          if (!userAccuracyCircleRef.current) {
+            const circle = L.circle([latitude, longitude], {
+              radius: Math.min(accuracy, 2000),
+              color: '#38bdf8',
+              fillColor: '#0284c7',
+              fillOpacity: 0.12,
+              weight: 1,
+              interactive: false
+            }).addTo(map);
+            userAccuracyCircleRef.current = circle;
+          } else {
+            userAccuracyCircleRef.current.setLatLng([latitude, longitude]);
+            userAccuracyCircleRef.current.setRadius(Math.min(accuracy, 2000));
+          }
+
+          // Auto-center if follow mode is active
+          if (isFollowingUser) {
+            map.panTo([latitude, longitude], { animate: true });
+          }
+        },
+        (error) => {
+          let msg = 'Konum alınamadı.';
+          if (error.code === error.PERMISSION_DENIED) {
+            msg = 'Konum izni reddedildi. Tarayıcı ayarlarından konuma izin veriniz.';
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            msg = 'GPS / Konum bilgisi alınamadı. Cihazınızın konum servisini açınız.';
+          } else if (error.code === error.TIMEOUT) {
+            msg = 'Konum alma zaman aşımına uğradı. Tekrar deneyiniz.';
+          }
+          setGeoErrorMsg(msg);
+          setIsLocating(false);
+          setIsFollowingUser(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 5000
+        }
+      );
+      watchIdRef.current = watchId;
+    } catch (e: any) {
+      setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlantısı gereklidir).');
+      setIsLocating(false);
+      setIsFollowingUser(false);
+    }
+  }, [isLocating, isFollowingUser, createUserLocationIcon]);
+
+  // Center on user location on-demand
+  const handleCenterOnUser = () => {
+    if (userCoords && mapInstanceRef.current) {
+      setIsFollowingUser(true);
+      mapInstanceRef.current.setView([userCoords.lat, userCoords.lng], 13, { animate: true });
+    } else {
+      toggleLocationTracking();
+    }
+  };
+
+  // Mobile resize & visibility watcher
   useEffect(() => {
     const handleResize = () => {
       if (mapInstanceRef.current) {
@@ -256,8 +519,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     };
   }, [isFullscreen]);
 
-  // Handle map reset view
+  // Handle map reset view to Samsun-Ordu
   const handleResetView = useCallback(() => {
+    setIsFollowingUser(false);
     if (mapInstanceRef.current) {
       mapInstanceRef.current.fitBounds(SAMSUN_ORDU_BOUNDS, {
         padding: [20, 20],
@@ -326,13 +590,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
         {/* Region Scope Tag */}
         <div className="flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full shrink-0">
-          <span>Karadeniz Kıyı Hattı</span>
+          <span>{filteredSpots.length} Mera Kayıtlı</span>
         </div>
       </div>
 
       {/* Real Interactive Leaflet Map Container with Clean OpenStreetMap Tiles */}
       <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
-        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[330px] sm:h-[390px]'
+        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[400px]'
       }`}>
         
         {/* Leaflet Mount Target */}
@@ -357,8 +621,32 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Map Top-Left Quick Actions (Simplified to reliable Samsun-Ordu reset) */}
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
+        {/* Geolocation Warning if User is Outside Samsun-Ordu */}
+        {isUserOutsideRegion && (
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-xl backdrop-blur-md flex items-start gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <strong>Bölge Dışı Konum:</strong> GPS konumunuz tespit edildi ancak Samsun–Ordu kıyı analiz bölgesinin dışındasınız.
+            </div>
+          </div>
+        )}
+
+        {/* Geolocation Error Toast */}
+        {geoErrorMsg && (
+          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-xl backdrop-blur-md flex items-center justify-between gap-2 animate-in fade-in">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span>{geoErrorMsg}</span>
+            </div>
+            <button onClick={() => setGeoErrorMsg(null)} className="p-1 text-slate-400 hover:text-white">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Map Top-Left Quick Actions */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20 flex-wrap">
+          {/* 1. Recenter to Samsun-Ordu View */}
           <button
             onClick={handleResetView}
             className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md transition"
@@ -367,10 +655,68 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <RotateCcw className="w-3 h-3 text-cyan-400" />
             <span>Samsun–Ordu</span>
           </button>
+
+          {/* 2. My Location (Konumum) Button */}
+          <button
+            onClick={handleCenterOnUser}
+            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
+              isLocating 
+                ? 'bg-cyan-600 text-white border-cyan-400 shadow-cyan-500/20' 
+                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-cyan-400'
+            }`}
+            title={isLocating ? 'Konum takibi aktif (Tıklayarak odaklanın veya kapatın)' : 'Konumumu Haritada Göster'}
+          >
+            <Navigation className={`w-3 h-3 ${isLocating ? 'fill-white animate-pulse' : 'text-cyan-400'}`} />
+            <span>{isLocating ? 'Konumum' : 'Konumum'}</span>
+          </button>
+
+          {/* 3. Follow Me Toggle (Only visible when location is active) */}
+          {isLocating && (
+            <button
+              onClick={() => setIsFollowingUser(!isFollowingUser)}
+              className={`px-2 py-1.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
+                isFollowingUser
+                  ? 'bg-emerald-600 text-white border-emerald-400'
+                  : 'bg-slate-900/90 text-slate-300 border-slate-700'
+              }`}
+              title="Kullanıcı hareket ettikçe haritayı otomatik takip et"
+            >
+              <span>{isFollowingUser ? '✓ Takip Açık' : 'Takip'}</span>
+            </button>
+          )}
+
+          {/* 4. Heatmap Toggle (Isı Haritası) */}
+          <button
+            onClick={() => setIsHeatmapActive(!isHeatmapActive)}
+            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
+              isHeatmapActive
+                ? 'bg-amber-600 text-white border-amber-400 shadow-amber-500/20'
+                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-amber-400'
+            }`}
+            title="Model Balık Aktivitesi Isı Katmanı (Model tahmini)"
+          >
+            <Flame className={`w-3 h-3 ${isHeatmapActive ? 'fill-white text-white' : 'text-amber-400'}`} />
+            <span>{isHeatmapActive ? 'Isı Katmanı' : 'Isı Katmanı'}</span>
+          </button>
         </div>
 
-        {/* Map Top-Right: Fullscreen Toggle */}
-        <div className="absolute top-3 right-12 z-20">
+        {/* Map Top-Right: Filters & Fullscreen Toggle */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+          {/* Mera Filter Drawer Button */}
+          <button
+            onClick={() => setShowFilterDrawer(!showFilterDrawer)}
+            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
+              cityFilter !== 'Tümü' || typeFilter !== 'Tümü' || verificationFilter !== 'Tümü'
+                ? 'bg-cyan-700 text-white border-cyan-400'
+                : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
+            }`}
+            title="Mera Filtreleri"
+          >
+            <Filter className="w-3 h-3 text-cyan-400" />
+            <span className="hidden sm:inline">Filtre</span>
+          </button>
+
+          {/* Fullscreen Toggle */}
           <button
             onClick={() => {
               setIsFullscreen(!isFullscreen);
@@ -385,12 +731,102 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </button>
         </div>
 
-        {/* Interactive Instruction Pill in Center-Top (Mobile & Desktop) */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none hidden md:block">
-          <div className="px-3 py-1 rounded-full bg-slate-950/90 border border-slate-800 text-[10px] text-slate-300 backdrop-blur-md">
-            👆 Kıyı noktasına dokunarak koordinat seçebilir veya avlak simgelerine tıklayabilirsiniz
+        {/* Expandable Filter Bar (Top overlay) */}
+        {showFilterDrawer && (
+          <div className="absolute top-14 left-3 right-3 z-30 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-cyan-400" />
+                Mera Filtreleri ({filteredSpots.length} nokta listeleniyor)
+              </span>
+              <button 
+                onClick={() => {
+                  setCityFilter('Tümü');
+                  setTypeFilter('Tümü');
+                  setVerificationFilter('Tümü');
+                }}
+                className="text-[10px] text-cyan-400 hover:underline"
+              >
+                Sıfırla
+              </button>
+            </div>
+
+            {/* Filter 1: City */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400 w-16">İl:</span>
+              {(['Tümü', 'Samsun', 'Ordu'] as const).map(city => (
+                <button
+                  key={city}
+                  onClick={() => setCityFilter(city)}
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    cityFilter === city
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {city} {city === 'Samsun' ? '(13)' : city === 'Ordu' ? '(17)' : '(30)'}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter 2: Coast Type */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400 w-16">Kıyı Tipi:</span>
+              {(['Tümü', 'Mendirek/Liman', 'Kayalık', 'Kumsal', 'Dere Ağzı'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    typeFilter === t
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter 3: Verification */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400 w-16">Doğrulama:</span>
+              <button
+                onClick={() => setVerificationFilter('Tümü')}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  verificationFilter === 'Tümü' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                Tümü
+              </button>
+              <button
+                onClick={() => setVerificationFilter('FIZIKI_YAPI_TEYITLI')}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  verificationFilter === 'FIZIKI_YAPI_TEYITLI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                ⚓ Fiziki Yapı Teyitli
+              </button>
+              <button
+                onClick={() => setVerificationFilter('COGRAFI_REFERANS_NOKTASI')}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  verificationFilter === 'COGRAFI_REFERANS_NOKTASI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                📍 Coğrafi Referans
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Heatmap Active Transparent Notice Banner */}
+        {isHeatmapActive && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="px-3 py-1 rounded-full bg-amber-950/90 border border-amber-500/50 text-[10px] text-amber-300 backdrop-blur-md shadow-lg flex items-center gap-1.5">
+              <Flame className="w-3 h-3 text-amber-400 fill-amber-400" />
+              <span>Model Tahmin Katmanı: {selectedFish.name} için mevsimsel aktivite dağılımı (Gerçek gözlem değildir)</span>
+            </div>
+          </div>
+        )}
 
         {/* Map Bottom Legend Pill */}
         <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-2 text-[10px] text-slate-300 bg-slate-950/90 px-2.5 py-1 rounded-full border border-slate-800 backdrop-blur-md">
@@ -399,6 +835,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <span className="flex items-center gap-1">🪨 <strong className="text-amber-400 font-medium">Kayalık</strong></span>
           <span>•</span>
           <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
+          <span>•</span>
+          <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
         </div>
 
         {/* Bottom-Right Honest Safety Status Indicator */}
@@ -449,7 +887,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 <span>{selectedCoord.lat.toFixed(4)}° N, {selectedCoord.lng.toFixed(4)}° E</span>
                 {geoAnalysis.distanceToCoastKm !== null && (
                   <span className="text-[10px] text-slate-400 font-sans">
-                    (Referans çizgisine ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`}; eşik: ~450 m)
+                    (Kıyı referans çizgisine ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`}; eşik: ~450 m)
                   </span>
                 )}
               </div>
@@ -476,12 +914,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         {selectedSpot ? (
           <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
             <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
-              <span>Konum Teyit Kapsamı:</span>
-              <span className="text-slate-500">Yalnızca Fiziki Varlık</span>
+              <span>Mera Konum Teyit Kapsamı:</span>
+              <span className="text-slate-400 font-mono">{selectedSpot.city} · {selectedSpot.district}</span>
             </div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{selectedSpot.verificationNote}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Önemli:</strong> Teyit yalnızca haritadaki fiziki kıyı yapısının veya coğrafi noktanın varlığı ile sınırlıdır; balık verimi, derinlik ve güvenlik durumunu kapsamaz.
+              <strong>Önemli:</strong> Coğrafi konumun doğrulanması balık veriminin, derinliğin veya güvenliğin doğrulandığı anlamına gelmez.
             </div>
             {selectedSpot.cautions && (
               <p className="text-amber-400/90 text-[10px] pt-0.5 flex items-start gap-1">
@@ -495,12 +933,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı çizgisi değildir.
+              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisi değildir.
             </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
               <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
                 <MapPin className="w-3 h-3 shrink-0" />
-                <span>En yakın kayıtlı nokta: <strong>{geoAnalysis.nearestSpot.name}</strong> (~{geoAnalysis.distanceToNearestSpotKm} km)</span>
+                <span>En yakın kayıtlı mera: <strong>{geoAnalysis.nearestSpot.name}</strong> (~{geoAnalysis.distanceToNearestSpotKm} km)</span>
               </p>
             )}
           </div>
@@ -560,7 +998,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         {/* Cautions, Safety & Data Source Attribution */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
           <div>
-            <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi (Eşik: ~450 m)
+            <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi
           </div>
           <div className="text-amber-400/90 font-mono">
             ⚠ Canlı rüzgâr/dalga sensörü bağlı değildir. Güvenlik için yerel hava durumunu kontrol ediniz.
@@ -679,7 +1117,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div className="text-xs text-slate-300 leading-relaxed space-y-1.5">
             {activeQuickTab === 'mera' && (
               <>
-                <p><strong>Kapsam:</strong> Samsun, Terme, Çarşamba, Ünye, Fatsa, Perşembe ve Ordu kıyı şeridi.</p>
+                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} kayıtlı kıyı noktası).</p>
                 <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir deltaları; liman alanlarında ise yapay taş dolgu mendirekler bulunur.</p>
                 <p className="text-[10px] text-slate-500">Not: Kıyı yapısı sahada fırtına ve debiye bağlı olarak değişebilir; sahaya inmeden önce yerinde inceleme yapınız.</p>
               </>

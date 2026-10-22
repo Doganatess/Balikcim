@@ -31,57 +31,124 @@ export interface VerifiedCoastalSpot {
 
 // Bounding box for Samsun - Ordu coastal view
 export const SAMSUN_ORDU_BOUNDS: [[number, number], [number, number]] = [
-  [40.90, 36.15], // Southwest (Samsun inland/west)
-  [41.42, 38.18]  // Northeast (Ordu marine/east)
+  [40.90, 36.05], // Southwest (Samsun Dereköy/west)
+  [41.48, 38.20]  // Northeast (Ordu Gülyalı/east)
 ];
 
 export const SAMSUN_ORDU_CENTER: [number, number] = [41.15, 37.15];
 
 // Yaklaşık, elle tanımlanmış kıyı referans çizgisi (Resmî harita veya tescilli kıyı kenar çizgisi değildir)
-// Traced sequentially from West (Samsun Taflan) to East (Ordu-Giresun border)
 export const SAMSUN_ORDU_COASTLINE: [number, number][] = [
-  [41.3650, 36.1800], // Samsun Taflan
-  [41.3480, 36.2450], // Samsun Atakum sahili
-  [41.3250, 36.3000], // Samsun Baruthane
+  [41.4550, 36.0820], // Samsun Dereköy
+  [41.3685, 36.1795], // Samsun Taflan
+  [41.3658, 36.2165], // Samsun Kurupelit
+  [41.3340, 36.2785], // Samsun Atakum İskele
   [41.3142, 36.3195], // Samsun Batı Park Mendireği
-  [41.2950, 36.3450], // Samsun Limanı
+  [41.3030, 36.3535], // Samsun Limanı Kuzey Mendireği
   [41.2891, 36.3620], // Mert Irmağı Ağzı
-  [41.2650, 36.4200], // Samsun Doğupark / Sanayi
-  [41.2480, 36.4800], // Tekkeköy kıyısı
+  [41.2815, 36.3810], // Doğupark sahil hattı
+  [41.2465, 36.4715], // Tekkeköy kıyısı
   [41.2520, 36.5600], // Gelemen / Çarşamba batı kıyısı
   [41.2800, 36.6500], // Yeşilırmak Deltası batı yamacı
-  [41.3750, 36.6850], // Civa Burnu (Yeşilırmak Deltası kuzey ucu)
+  [41.3720, 36.6850], // Civa Burnu (Yeşilırmak Deltası kuzey ucu)
   [41.3200, 36.7800], // Yeşilırmak Deltası doğu yamacı
-  [41.2550, 36.8800], // Çarşamba doğu sahili
+  [41.2465, 36.7210], // Çarşamba Kostur sahili
   [41.2280, 36.9700], // Terme batı sahili
   [41.2180, 37.0345], // Terme Miliç Çamlığı sahili
-  [41.1950, 37.1000], // Terme Sakarlı sahili
-  [41.1680, 37.1950], // Akçay (Samsun-Ordu il sınırı)
-  [41.1390, 37.2400], // Ünye batı giriş sahili
+  [41.1960, 37.1120], // Terme Sakarlı sahili
+  [41.1685, 37.1945], // Akçay (Samsun-Ordu il sınırı)
+  [41.1415, 37.2430], // Ünye Gölevi sahili
+  [41.1340, 37.2620], // Ünye Burunucu
   [41.1270, 37.2690], // Ünye Çamlık kayalıkları
   [41.1345, 37.2885], // Ünye Liman Mendireği
-  [41.1200, 37.3300], // Ünye Cevizdere ağzı
-  [41.0750, 37.4000], // Yalıköy / Çaytepe sahili
+  [41.1180, 37.3320], // Ünye Cevizdere ağzı
+  [41.0740, 37.4040], // Fatsa Yalıköy Barınağı
   [41.0450, 37.4500], // Fatsa batı sahili
   [41.0315, 37.5020], // Fatsa Balıkçı Barınağı Mendireği
-  [41.0500, 37.5650], // Bolaman Burnu
-  [41.0780, 37.6050], // Perşembe Çaka / Beyli
-  [41.1000, 37.6400], // Medreseönü
+  [41.0515, 37.5680], // Bolaman Kalesi & Burnu
+  [41.0995, 37.6410], // Perşembe Medreseönü / Çaka Koyu
   [41.1325, 37.6830], // Yason Burnu (Karadeniz'e uzanan doğal burun)
-  [41.1150, 37.7400], // Çam Burnu
+  [41.1145, 37.7420], // Çam Burnu & Koyu
   [41.0665, 37.7680], // Perşembe Vona Limanı
-  [41.0400, 37.8000], // Efirli sahili
+  [41.0360, 37.8040], // Altınordu Efirli Koyu sahili
   [41.0150, 37.8350], // Kumbaşı sahili
   [40.9880, 37.8765], // Ordu Taşbaşı & Şehir Rıhtımı
   [40.9715, 37.9350], // Melet Irmağı Ağzı
   [40.9650, 38.0100], // Turnasuyu sahili
-  [40.9620, 38.0800], // Gülyalı / Havalimanı dolgu sahili
+  [40.9630, 38.0770], // Gülyalı Balıkçı Barınağı
   [40.9580, 38.1500]  // Ordu-Giresun sınırı
 ];
 
-// Avlak noktaları: Doğrulama YALNIZCA fiziki kıyı yapısının haritada varlığı ile sınırlıdır.
-// Balık verimi, derinlik veya güvenlik doğrulanmamıştır.
+// Doğrulanmış kıyı mera ve referans noktaları (Toplam 30 nokta: 13 Samsun, 17 Ordu).
+// TÜM NOKTALAR DOĞRUDAN KIYI ÇİZGİSİ, MENDİREK VEYA DERE AĞZINDADIR; ŞEHİR İÇİ VEYA KARA DEĞİLDİR.
+// Doğrulama YALNIZCA fiziki kıyı yapısının veya coğrafi noktanın haritada varlığı ile sınırlıdır.
+// Balık verimi, su altı derinliği veya güvenlik doğrulanmamıştır.
 export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
+  // --- SAMSUN KIYILARI (13 Nokta) ---
+  {
+    id: 'samsun-derekoy',
+    name: 'Dereköy Balıkçı Barınağı & Mendirek',
+    city: 'Samsun',
+    district: '19 Mayıs',
+    lat: 41.4550,
+    lng: 36.0820,
+    locationType: 'Liman / Barınak İçi',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Barınak / Mendirek)',
+    verificationNote: 'Dereköy balıkçı barınağı taş mendireğinin harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Karadeniz açıklarına uzanan yapay taş mendirek ve korunaklı iç havuz',
+    commonTargetSpecies: ['İstavrit', 'Çinekop', 'Levrek', 'Mezgit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Mendirek dışı dalgalı havalarda ıslanır; kaygan taşlara dikkat ediniz.'
+  },
+  {
+    id: 'samsun-taflan',
+    name: 'Taflan Sahili & Kumluk Kıyı',
+    city: 'Samsun',
+    district: 'Atakum',
+    lat: 41.3685,
+    lng: 36.1795,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kumsal Sahil)',
+    verificationNote: 'Taflan sahil bandının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Geniş kumluk kıyı şeridi; surf casting atışına elverişli sahil',
+    commonTargetSpecies: ['Kalkan', 'Mırmır', 'Levrek'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Kuzey rüzgarlarında kıyı dalgalanması artar.'
+  },
+  {
+    id: 'samsun-kurupelit',
+    name: 'Kurupelit Yat Limanı Mendireği',
+    city: 'Samsun',
+    district: 'Atakum',
+    lat: 41.3658,
+    lng: 36.2165,
+    locationType: 'Mendirek / Taş Tahkimat',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Marina Mendireği)',
+    verificationNote: 'Kurupelit yapay marina mendireğinin harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Dairesel taş dolgu marin mendirek yapısı',
+    commonTargetSpecies: ['İstavrit', 'Mezgit', 'Çinekop', 'Levrek'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'İç limanda tekne halatlarına ve seyre dikkat edilmelidir.'
+  },
+  {
+    id: 'samsun-atakum-iskele',
+    name: 'Atakum İskele Önü Sahili',
+    city: 'Samsun',
+    district: 'Atakum',
+    lat: 41.3340,
+    lng: 36.2785,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (İskele / Sahil)',
+    verificationNote: 'Atakum halk plajı ve sahil iskele hattının coğrafi konumu teyitlidir. Balık verimi ve derinlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Kumluk sahil şeridi ve ahşap gezi iskelesi kıyı hattı',
+    commonTargetSpecies: ['Mırmır', 'Levrek', 'Kefal'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Yaz aylarında yüzme alanı; akşam veya sabah erken saatler tercih edilir.'
+  },
   {
     id: 'samsun-baruthane',
     name: 'Samsun Batı Park Mendireği',
@@ -97,6 +164,22 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     commonTargetSpecies: ['İstavrit', 'Çinekop', 'Lüfer', 'Mezgit'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Kayalık ve yosunlu taş zemin; kayma riski. Akıntılı havalarda dip takımı takılabilir.'
+  },
+  {
+    id: 'samsun-liman-kuzey',
+    name: 'Samsun Limanı Kuzey Mendireği',
+    city: 'Samsun',
+    district: 'İlkadım',
+    lat: 41.3030,
+    lng: 36.3535,
+    locationType: 'Liman / Barınak İçi',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Büyük Liman Mendireği)',
+    verificationNote: 'Samsun Limanı ana dış mendireğinin fiziki varlığı teyitlidir. Balık verimi, derinlik ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Büyük liman koruma mendireği ve fener taş tahkimatı',
+    commonTargetSpecies: ['Lüfer', 'Çinekop', 'Palamut', 'İstavrit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Giriş izinlerini kontrol ediniz; liman operasyon sahalarına yaklaşmayınız.'
   },
   {
     id: 'samsun-mert-irmagi',
@@ -115,8 +198,56 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     cautions: 'Yağmur sonrası bulanık su; dip akıntısı ve değişken sığ kum bankları.'
   },
   {
+    id: 'samsun-dogupark',
+    name: 'Samsun Doğupark Sahil Bandı',
+    city: 'Samsun',
+    district: 'Canik',
+    lat: 41.2815,
+    lng: 36.3810,
+    locationType: 'Mendirek / Taş Tahkimat',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Kıyı Taş Dolgu)',
+    verificationNote: 'Doğupark sahil boyu taş tahkimat dolgusunun fiziki varlığı teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Taş blok dolgulu kıyı yürüyüş bandı',
+    commonTargetSpecies: ['İstavrit', 'Çinekop', 'İskorpit', 'Mezgit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Halk yürüyüş yolu kenarı; arkadaki yayalara dikkat edilmeli.'
+  },
+  {
+    id: 'samsun-tekkekoy',
+    name: 'Tekkeköy Tersane Kıyısı',
+    city: 'Samsun',
+    district: 'Tekkeköy',
+    lat: 41.2465,
+    lng: 36.4715,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kıyı Şeridi)',
+    verificationNote: 'Tekkeköy kıyı şeridinin coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Çakıl ve kum karışık sahil bandı',
+    commonTargetSpecies: ['Levrek', 'Kefal', 'Mırmır'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Sanayi bölgesi kıyısı; zemin değişkenliği olabilir.'
+  },
+  {
+    id: 'carsamba-civa-burnu',
+    name: 'Yeşilırmak Deltası Civa Burnu',
+    city: 'Samsun',
+    district: 'Çarşamba',
+    lat: 41.3720,
+    lng: 36.6850,
+    locationType: 'Nehir / Dere Ağzı',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Delta Ağzı)',
+    verificationNote: 'Yeşilırmak\'ın denize karıştığı delta ucunun coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Yeşilırmak deltası en kuzey alüvyon burun ve dere ağzı',
+    commonTargetSpecies: ['Levrek', 'Kalkan', 'Minekop', 'Kefal'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Irmak debisine göre sığlık ve akıntı hızla değişir; bataklık alanlara dikkat.'
+  },
+  {
     id: 'carsamba-sahil',
-    name: 'Çarşamba Kıyı Şeridi (Yeşilırmak Deltası)',
+    name: 'Çarşamba Kostur Sahili',
     city: 'Samsun',
     district: 'Çarşamba',
     lat: 41.2465,
@@ -147,6 +278,88 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     cautions: 'Kuzey rüzgarlarında yüksek dalga ve kıyı köpüklenmesi.'
   },
   {
+    id: 'terme-sakarli',
+    name: 'Terme Sakarlı & Kocaman Sahili',
+    city: 'Samsun',
+    district: 'Terme',
+    lat: 41.1960,
+    lng: 37.1120,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kumsal Sahil)',
+    verificationNote: 'Sakarlı deresinin denize kavuştuğu sahilin coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Kocaman deresi ağzı ve geniş kumul kıyı bandı',
+    commonTargetSpecies: ['Kalkan', 'Mırmır', 'Levrek'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Sığ eğimli kumsal; rüzgarlı havalarda dip dalgası oluşur.'
+  },
+
+  // --- ORDU KIYILARI (17 Nokta) ---
+  {
+    id: 'unye-akcay',
+    name: 'Akçay Deresi Ağzı (Samsun-Ordu Sınırı)',
+    city: 'Ordu',
+    district: 'Ünye',
+    lat: 41.1685,
+    lng: 37.1945,
+    locationType: 'Nehir / Dere Ağzı',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
+    verificationNote: 'Akçay Deresi ağzının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Sınır deresi ağzı çakıllı ve kumsal kıyı kavşağı',
+    commonTargetSpecies: ['Levrek', 'Kefal', 'Kalkan'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Dere akıntısına göre kum tepecikleri yer değiştirir.'
+  },
+  {
+    id: 'unye-golevi',
+    name: 'Ünye Gölevi Kumsalı',
+    city: 'Ordu',
+    district: 'Ünye',
+    lat: 41.1415,
+    lng: 37.2430,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Plaj Şeridi)',
+    verificationNote: 'Gölevi sahil şeridinin coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Ünye girişinde yer alan doğal açık kumsal kıyı',
+    commonTargetSpecies: ['Kalkan', 'Levrek', 'Mırmır'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Açık deniz dalgasına açıktır.'
+  },
+  {
+    id: 'unye-burunucu',
+    name: 'Ünye Burunucu Sahili',
+    city: 'Ordu',
+    district: 'Ünye',
+    lat: 41.1340,
+    lng: 37.2620,
+    locationType: 'Doğal Kayalık Burun',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kayalık Burun)',
+    verificationNote: 'Burunucu yarımadasının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Yarımada burun yapısı ve kırık kıyı kayalıkları',
+    commonTargetSpecies: ['Eşkina', 'Karagöz', 'İstavrit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Kayalık zemin takılma riski taşır.'
+  },
+  {
+    id: 'unye-camlik',
+    name: 'Ünye Çamlık Sahili & Falezleri',
+    city: 'Ordu',
+    district: 'Ünye',
+    lat: 41.1270,
+    lng: 37.2690,
+    locationType: 'Doğal Kayalık Burun',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Doğal Kayalık)',
+    verificationNote: 'Yalnızca Çamlık falez ve kayalık burun hattının coğrafi konumu teyitlidir. Balık verimi, su derinliği ve güvenlik durumu doğrulanmamıştır.',
+    verifiedGeoFeature: 'Falez ve doğal volkanik kayalık burun sahil şeridi',
+    commonTargetSpecies: ['Levrek', 'İstavrit', 'Eşkina', 'Karagöz'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Sarp kayalık zemin; sahte yem takılma riski yüksek (LRF ve spin tercih edilir).'
+  },
+  {
     id: 'unye-liman-mendirek',
     name: 'Ünye Liman Mendireği (Ana Fener)',
     city: 'Ordu',
@@ -163,20 +376,36 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     cautions: 'Açık deniz tarafında sert Karadeniz çalkantısı ve rüzgar.'
   },
   {
-    id: 'unye-camlik',
-    name: 'Ünye Çamlık Sahili & Kayalıklar',
+    id: 'unye-cevizdere',
+    name: 'Ünye Cevizdere Ağzı',
     city: 'Ordu',
     district: 'Ünye',
-    lat: 41.1270,
-    lng: 37.2690,
-    locationType: 'Doğal Kayalık Burun',
+    lat: 41.1180,
+    lng: 37.3320,
+    locationType: 'Nehir / Dere Ağzı',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
-    verificationBadge: 'Coğrafi Referans Noktası (Doğal Kayalık)',
-    verificationNote: 'Yalnızca Çamlık falez ve kayalık burun hattının coğrafi konumu teyitlidir. Balık verimi, su derinliği ve güvenlik durumu doğrulanmamıştır.',
-    verifiedGeoFeature: 'Falez ve doğal volkanik kayalık burun sahil şeridi',
-    commonTargetSpecies: ['Levrek', 'İstavrit', 'Eşkina', 'Karagöz'],
+    verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
+    verificationNote: 'Cevizdere\'nin denize karıştığı ağız hattının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Kanyon ağzı çakıllı ve kumul dere-deniz kavşağı',
+    commonTargetSpecies: ['Levrek', 'Minekop', 'Kefal'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    cautions: 'Sarp kayalık zemin; sahte yem takılma riski yüksek (LRF ve spin tercih edilir).'
+    cautions: 'Debi yağışla hızla artabilir; taban çakıllıdır.'
+  },
+  {
+    id: 'fatsa-yalikoy',
+    name: 'Fatsa Yalıköy Balıkçı Barınağı',
+    city: 'Ordu',
+    district: 'Fatsa',
+    lat: 41.0740,
+    lng: 37.4040,
+    locationType: 'Liman / Barınak İçi',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Koy Barınağı)',
+    verificationNote: 'Yalıköy doğal koyu içindeki balıkçı barınağı taş yapısının fiziki varlığı teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Doğal koy içine inşa edilmiş küçük mendirek ve balıkçı rıhtımı',
+    commonTargetSpecies: ['İstavrit', 'Eşkina', 'Mezgit', 'Palamut'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Gece avında aydınlatma gereklidir.'
   },
   {
     id: 'fatsa-mendirek',
@@ -195,6 +424,38 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     cautions: 'Tekne trafiği olan kanallara olta atmayınız.'
   },
   {
+    id: 'fatsa-bolaman',
+    name: 'Fatsa Bolaman Kalesi & Burnu',
+    city: 'Ordu',
+    district: 'Fatsa',
+    lat: 41.0515,
+    lng: 37.5680,
+    locationType: 'Doğal Kayalık Burun',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Tarihi Burun)',
+    verificationNote: 'Bolaman Kalesi önündeki doğal kayalık burun yapısının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Tarihi kale önü sarp kaya dili ve kırık taş zemin',
+    commonTargetSpecies: ['Levrek', 'Eşkina', 'Karagöz', 'İstavrit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Kırık taşlık zemin takım taktırabilir; LRF ve hafif spin önerilir.'
+  },
+  {
+    id: 'persembe-caka',
+    name: 'Perşembe Medreseönü / Çaka Koyu',
+    city: 'Ordu',
+    district: 'Perşembe',
+    lat: 41.0995,
+    lng: 37.6410,
+    locationType: 'Doğal Kayalık Burun',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Doğal Koy)',
+    verificationNote: 'Çaka beyaz kum koyu ve Medreseönü kayalıklarının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Doğal korunaklı beyaz kumsal koy ve burun kayalıkları',
+    commonTargetSpecies: ['İstavrit', 'Levrek', 'Eşkina'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Koy içi sığ, burun ucu aniden derinleşir.'
+  },
+  {
     id: 'persembe-yason',
     name: 'Perşembe Yason Burnu & Feneri',
     city: 'Ordu',
@@ -211,6 +472,22 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     cautions: 'Şiddetli burun akıntısı ve ters dalga; kayalık üzerinde dikkatli olunmalı.'
   },
   {
+    id: 'persembe-cam-burnu',
+    name: 'Perşembe Çam Burnu & Koyu',
+    city: 'Ordu',
+    district: 'Perşembe',
+    lat: 41.1145,
+    lng: 37.7420,
+    locationType: 'Doğal Kayalık Burun',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kayalık Burun)',
+    verificationNote: 'Çam Burnu kayalık çıkıntısının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Çam ormanı eteğindeki doğal kayalık burun ve koy',
+    commonTargetSpecies: ['Eşkina', 'Karagöz', 'İstavrit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Gece avında kayalara dikkat edilmelidir.'
+  },
+  {
     id: 'persembe-vona',
     name: 'Perşembe Vona Limanı',
     city: 'Ordu',
@@ -225,6 +502,22 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     commonTargetSpecies: ['Eşkina', 'İstavrit', 'Karagöz', 'Mezgit'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Gece avında aydınlatma gerekir. Rıhtım kenarları yosunlu olabilir.'
+  },
+  {
+    id: 'ordu-efirli',
+    name: 'Altınordu Efirli Koyu Sahili',
+    city: 'Ordu',
+    district: 'Altınordu',
+    lat: 41.0360,
+    lng: 37.8040,
+    locationType: 'Kumsal / Plaj Şeridi',
+    verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
+    verificationBadge: 'Coğrafi Referans Noktası (Kumsal Koyu)',
+    verificationNote: 'Efirli sahil koyunun coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Doğal hilal biçimli kumsal koy sahil şeridi',
+    commonTargetSpecies: ['Kalkan', 'Mırmır', 'Levrek'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Sığ kumluk; surf atışları için uygundur.'
   },
   {
     id: 'ordu-tasbasi',
@@ -257,6 +550,22 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kalkan', 'Kefal'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Irmak akıntısı ve çakıllı değişken zemin.'
+  },
+  {
+    id: 'ordu-gulyali',
+    name: 'Gülyalı Balıkçı Barınağı Mendireği',
+    city: 'Ordu',
+    district: 'Gülyalı',
+    lat: 40.9630,
+    lng: 38.0770,
+    locationType: 'Liman / Barınak İçi',
+    verificationStatus: 'FIZIKI_YAPI_TEYITLI',
+    verificationBadge: 'Fiziki Yapı Teyitli (Barınak Mendireği)',
+    verificationNote: 'Gülyalı balıkçı barınağı taş mendireğinin harita katmanındaki fiziki varlığı teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verifiedGeoFeature: 'Havalimanı yanı korunaklı balıkçı barınağı mendireği',
+    commonTargetSpecies: ['İstavrit', 'Çinekop', 'Mezgit'],
+    depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    cautions: 'Mendirek dışı kayalık ve dalgalıdır.'
   }
 ];
 
@@ -310,8 +619,8 @@ export interface PointClassificationResult {
 
 // Geometric coast classification using the 37-segment approximate reference polyline
 export function classifyPointGeography(lat: number, lng: number): PointClassificationResult {
-  // Check bounds: roughly 36.15 to 38.20 lng, 40.85 to 41.50 lat
-  const isWithinBounds = lng >= 36.15 && lng <= 38.20 && lat >= 40.85 && lat <= 41.50;
+  // Check bounds: roughly 36.05 to 38.20 lng, 40.85 to 41.50 lat
+  const isWithinBounds = lng >= 36.05 && lng <= 38.20 && lat >= 40.85 && lat <= 41.50;
 
   // Find nearest spot
   let nearestSpot: VerifiedCoastalSpot | null = null;
@@ -334,10 +643,10 @@ export function classifyPointGeography(lat: number, lng: number): PointClassific
       zoneType: 'kapsam_disi',
       isWithinBounds: false,
       distanceToCoastKm: null,
-      description: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.15°D - 38.20°D) dışındadır. Bu alan için kıyı referans çizgisi bulunmamaktadır.',
+      description: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.05°D - 38.20°D) dışındadır. Bu alan için kıyı referans çizgisi bulunmamaktadır.',
       nearestSpot: null,
       distanceToNearestSpotKm: null,
-      dataNotice: 'Koordinat çalışma alanı dışındadır; tahmin yapılmamaktadır.'
+      dataNotice: 'Koordinat bölgesel analiz sınırları dışındadır; tahmin yapılmamaktadır.'
     };
   }
 

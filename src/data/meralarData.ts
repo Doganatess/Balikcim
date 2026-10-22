@@ -4,7 +4,7 @@ export interface MeraSpot {
   province: string;
   district: string;
   distanceKm: number;
-  activityScore: number; // 0 - 100
+  activityScore: number; // 0 - 100 model skoru
   isTrending: boolean;
   type: 'Kıyı' | 'Tekne' | 'Liman' | 'Kayalık' | 'Kumsal' | 'İç Su';
   popularFish: string[];
@@ -13,134 +13,163 @@ export interface MeraSpot {
 }
 
 export const MERALAR_LIST: MeraSpot[] = [
+  // --- ORDU MERALARI ---
   {
-    id: 'm1',
-    name: 'Ordu, Merkez (Rıhtım & Taşbaşı)',
-    province: 'Ordu',
-    district: 'Merkez',
-    distanceKm: 50,
-    activityScore: 94,
-    isTrending: true,
-    type: 'Kayalık',
-    popularFish: ['İstavrit', 'Lüfer', 'Minekop'],
-    depthDesc: '6 - 15m',
-    bottomType: 'Kırma Taş & Kayalık'
-  },
-  {
-    id: 'm2',
-    name: 'Ordu, Ünye (Mendirek Feneri)',
+    id: 'm-unye-liman',
+    name: 'Ünye Liman Mendireği (Ana Fener)',
     province: 'Ordu',
     district: 'Ünye',
     distanceKm: 2,
-    activityScore: 89,
+    activityScore: 92,
     isTrending: true,
     type: 'Liman',
-    popularFish: ['Çinekop', 'Minekop', 'İstavrit'],
-    depthDesc: '8 - 14m',
-    bottomType: 'Kırma Taş & Beton Blok'
+    popularFish: ['Çinekop', 'Lüfer', 'İstavrit', 'Palamut'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Yapay Taş Dolgu & Mendirek'
   },
   {
-    id: 'm3',
-    name: 'Ordu, Fatsa (Balıkçı Barınağı)',
+    id: 'm-unye-camlik',
+    name: 'Ünye Çamlık Sahili & Falezleri',
+    province: 'Ordu',
+    district: 'Ünye',
+    distanceKm: 3,
+    activityScore: 89,
+    isTrending: true,
+    type: 'Kayalık',
+    popularFish: ['Levrek', 'Eşkina', 'Karagöz', 'İstavrit'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Doğal Volkanik Kayalık & Kırık Taş'
+  },
+  {
+    id: 'm-fatsa-barinak',
+    name: 'Fatsa Balıkçı Barınağı Mendireği',
     province: 'Ordu',
     district: 'Fatsa',
     distanceKm: 18,
     activityScore: 88,
     isTrending: true,
-    type: 'Kıyı',
-    popularFish: ['İstavrit', 'Palamut'],
-    depthDesc: '10 - 18m',
-    bottomType: 'Kırma Taş'
+    type: 'Liman',
+    popularFish: ['İstavrit', 'Minekop', 'Palamut', 'Kefal'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Kırma Taş & Korunaklı İç Liman'
   },
   {
-    id: 'm4',
-    name: 'Ordu, Merkez (Melet Ağzı)',
+    id: 'm-persembe-yason',
+    name: 'Perşembe Yason Burnu & Feneri',
     province: 'Ordu',
-    district: 'Merkez',
-    distanceKm: 55,
+    district: 'Perşembe',
+    distanceKm: 32,
+    activityScore: 94,
+    isTrending: true,
+    type: 'Kayalık',
+    popularFish: ['Lüfer', 'Palamut', 'Levrek', 'İstavrit'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Karadeniz\'e Uzanan Doğal Kaya Dili'
+  },
+  {
+    id: 'm-persembe-vona',
+    name: 'Perşembe Vona Limanı & Rıhtım',
+    province: 'Ordu',
+    district: 'Perşembe',
+    distanceKm: 36,
+    activityScore: 86,
+    isTrending: true,
+    type: 'Liman',
+    popularFish: ['Eşkina', 'İstavrit', 'Karagöz', 'Mezgit'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Doğal Derin Koy & Balıkçı Rıhtımı'
+  },
+  {
+    id: 'm-ordu-tasbasi',
+    name: 'Ordu Rıhtım & Taşbaşı Kıyısı',
+    province: 'Ordu',
+    district: 'Altınordu',
+    distanceKm: 50,
+    activityScore: 91,
+    isTrending: true,
+    type: 'Kayalık',
+    popularFish: ['İstavrit', 'Çinekop', 'Lüfer', 'Minekop'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Sahil Dolgusu & Taş Tahkimat'
+  },
+  {
+    id: 'm-ordu-melet',
+    name: 'Ordu Melet Irmağı Ağzı',
+    province: 'Ordu',
+    district: 'Altınordu',
+    distanceKm: 54,
     activityScore: 85,
     isTrending: true,
     type: 'Kumsal',
-    popularFish: ['Levrek', 'Minekop', 'Kalkan'],
-    depthDesc: '3 - 10m',
-    bottomType: 'İnce Kumluk'
+    popularFish: ['Levrek', 'Minekop', 'Kalkan', 'Kefal'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Alüvyon Çakıl & Kumul Hat'
   },
+
+  // --- SAMSUN MERALARI ---
   {
-    id: 'm5',
-    name: 'Ordu, Perşembe (Vona Limanı & Çaka)',
-    province: 'Ordu',
-    district: 'Perşembe',
-    distanceKm: 34,
-    activityScore: 82,
+    id: 'm-samsun-batipark',
+    name: 'Samsun Batı Park Mendireği',
+    province: 'Samsun',
+    district: 'İlkadım',
+    distanceKm: 75,
+    activityScore: 93,
     isTrending: true,
-    type: 'Kayalık',
-    popularFish: ['Eşkina', 'Karagöz', 'İstavrit'],
-    depthDesc: '8 - 22m',
-    bottomType: 'Derin Kayalık & Kovuk'
+    type: 'Liman',
+    popularFish: ['İstavrit', 'Çinekop', 'Lüfer', 'Mezgit'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Taş Tahkimat Blokları'
   },
   {
-    id: 'm6',
-    name: 'İstanbul, Aşiyan (Boğaz Burnu)',
-    province: 'İstanbul',
-    district: 'Sarıyer',
-    distanceKm: 850,
-    activityScore: 96,
-    isTrending: false,
-    type: 'Kıyı',
-    popularFish: ['Çinekop', 'Lüfer', 'İstavrit'],
-    depthDesc: '35 - 55m',
-    bottomType: 'Sert Akıntılı Burun'
+    id: 'm-samsun-kurupelit',
+    name: 'Kurupelit Yat Limanı Mendireği',
+    province: 'Samsun',
+    district: 'Atakum',
+    distanceKm: 85,
+    activityScore: 88,
+    isTrending: true,
+    type: 'Liman',
+    popularFish: ['İstavrit', 'Mezgit', 'Çinekop', 'Levrek'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Yapay Marin Mendirek'
   },
   {
-    id: 'm7',
-    name: 'İzmir, Çeşme Ildır Koyu',
-    province: 'İzmir',
-    district: 'Çeşme',
-    distanceKm: 980,
-    activityScore: 91,
-    isTrending: false,
-    type: 'Tekne',
-    popularFish: ['Çipura', 'Sinarit', 'Mercan'],
-    depthDesc: '12 - 30m',
-    bottomType: 'Eriştelik & Taşlık'
-  },
-  {
-    id: 'm8',
-    name: 'Çanakkale, Kilitbahir Kale Altı',
-    province: 'Çanakkale',
-    district: 'Eceabat',
-    distanceKm: 920,
-    activityScore: 90,
-    isTrending: false,
-    type: 'Kıyı',
-    popularFish: ['Lüfer', 'Torik', 'Sinarit'],
-    depthDesc: '20 - 45m',
-    bottomType: 'Boğaz Akıntılı Kayalık'
-  },
-  {
-    id: 'm9',
-    name: 'Sinop, İnceburun Kıyı Feneri',
-    province: 'Sinop',
-    district: 'Merkez',
-    distanceKm: 210,
+    id: 'm-samsun-mert',
+    name: 'Samsun Mert Irmağı Ağzı',
+    province: 'Samsun',
+    district: 'Canik',
+    distanceKm: 72,
     activityScore: 87,
-    isTrending: false,
-    type: 'Kayalık',
-    popularFish: ['Palamut', 'Lüfer', 'Levrek'],
-    depthDesc: '15 - 35m',
-    bottomType: 'Doğal Falez & Kayalık'
+    isTrending: true,
+    type: 'Kumsal',
+    popularFish: ['Levrek', 'Minekop', 'Kefal', 'Kalkan'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Alüvyon Kumsal & Dere Ağzı'
   },
   {
-    id: 'm10',
-    name: 'Sakarya, Sapanca Gölü (Sekapark)',
-    province: 'Sakarya',
-    district: 'Sapanca',
-    distanceKm: 760,
-    activityScore: 78,
-    isTrending: false,
-    type: 'İç Su',
-    popularFish: ['Turna', 'Sazan', 'Yayın'],
-    depthDesc: '3 - 12m',
-    bottomType: 'Sazlık & Çamurluk'
+    id: 'm-carsamba-delta',
+    name: 'Çarşamba Yeşilırmak Deltası Civa Burnu',
+    province: 'Samsun',
+    district: 'Çarşamba',
+    distanceKm: 55,
+    activityScore: 90,
+    isTrending: true,
+    type: 'Kumsal',
+    popularFish: ['Kalkan', 'Levrek', 'Minekop'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Geniş Delta Kumulları & Nehir Ağzı'
+  },
+  {
+    id: 'm-terme-milic',
+    name: 'Terme Miliç Sahili & Dere Ağzı',
+    province: 'Samsun',
+    district: 'Terme',
+    distanceKm: 28,
+    activityScore: 84,
+    isTrending: true,
+    type: 'Kumsal',
+    popularFish: ['Kalkan', 'Levrek', 'Mırmır'],
+    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
+    bottomType: 'Kumluk Plaj Sahili & Dere Ağzı'
   }
 ];
