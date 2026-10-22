@@ -300,7 +300,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       setSstError('Uydu katmanı servisine ulaşılamadı.');
       setSstLoading(false);
     }
-  }, [isSstActive, sstOpacity]);
+}, [isSstActive]);
 
   // Update opacity dynamically without re-creating layer
   useEffect(() => {
