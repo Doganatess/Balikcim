@@ -1,4 +1,5 @@
-export type CoastalLocationType = 
+
+export type CoastalLocationType =
   | 'Mendirek / Taş Tahkimat'
   | 'Liman / Barınak İçi'
   | 'Doğal Kayalık Burun'
@@ -7,10 +8,10 @@ export type CoastalLocationType =
   | 'Açık Deniz'
   | 'Karasal Alan';
 
-export type SpotVerificationStatus = 
-  | 'FIZIKI_YAPI_TEYITLI'        // Yalnızca fiziki liman/mendirek yapısının haritada varlığı teyitlidir
-  | 'COGRAFI_REFERANS_NOKTASI'   // Yalnızca doğal coğrafi oluşumun konumu teyitlidir
-  | 'GENIS_HAT_TEYITSIZ';        // Geniş hat; tekil mera teyitsizdir
+export type SpotVerificationStatus =
+  | 'FIZIKI_YAPI_TEYITLI'
+  | 'COGRAFI_REFERANS_NOKTASI'
+  | 'GENIS_HAT_TEYITSIZ';
 
 export interface VerifiedCoastalSpot {
   id: string;
@@ -29,63 +30,57 @@ export interface VerifiedCoastalSpot {
   cautions: string;
 }
 
-// Bounding box for Samsun - Ordu coastal view
 export const SAMSUN_ORDU_BOUNDS: [[number, number], [number, number]] = [
-  [40.90, 36.05], // Southwest (Samsun Dereköy/west)
-  [41.48, 38.20]  // Northeast (Ordu Gülyalı/east)
+  [40.90, 36.05],
+  [41.48, 38.20]
 ];
 
 export const SAMSUN_ORDU_CENTER: [number, number] = [41.15, 37.15];
 
-// Yaklaşık, elle tanımlanmış kıyı referans çizgisi (Resmî kadastro kıyı kenar çizgisi değildir)
+// Geriye dönük uyumluluk için mevcut yaklaşık kıyı referans noktaları korunmuştur.
 export const SAMSUN_ORDU_COASTLINE: [number, number][] = [
-  [41.4580, 36.0845], // Samsun Dereköy Mendirek
-  [41.3730, 36.1820], // Samsun Taflan Sahili
-  [41.3690, 36.2185], // Samsun Kurupelit Yat Limanı
-  [41.3355, 36.2810], // Samsun Atakum İskelesi
-  [41.3185, 36.3265], // Samsun Batı Park Mendireği
-  [41.3090, 36.3630], // Samsun Limanı Ana Dış Mendireği
-  [41.2915, 36.3645], // Mert Irmağı Ağzı
-  [41.2840, 36.3835], // Doğupark Taş Dolgusu
-  [41.2505, 36.4740], // Tekkeköy Tersane Kıyısı
-  [41.2520, 36.5600], // Gelemen / Çarşamba batı kıyısı
-  [41.2800, 36.6500], // Yeşilırmak Deltası batı yamacı
-  [41.3780, 36.6870], // Civa Burnu (Yeşilırmak Deltası kuzey ucu)
-  [41.3200, 36.7800], // Yeşilırmak Deltası doğu yamacı
-  [41.2490, 36.7230], // Çarşamba Kostur sahili
-  [41.2280, 36.9700], // Terme batı sahili
-  [41.2210, 37.0370], // Terme Miliç Çamlığı sahili
-  [41.1985, 37.1145], // Terme Sakarlı sahili
-  [41.1710, 37.1960], // Akçay (Samsun-Ordu il sınırı)
-  [41.1435, 37.2450], // Ünye Gölevi sahili
-  [41.1365, 37.2640], // Ünye Burunucu
-  [41.1290, 37.2710], // Ünye Çamlık kayalıkları
-  [41.1355, 37.2915], // Ünye Liman Mendireği
-  [41.1200, 37.3340], // Ünye Cevizdere ağzı
-  [41.0760, 37.4065], // Fatsa Yalıköy Barınağı
-  [41.0450, 37.4500], // Fatsa batı sahili
-  [41.0345, 37.5055], // Fatsa Balıkçı Barınağı Mendireği
-  [41.0535, 37.5705], // Bolaman Kalesi & Burnu
-  [41.1015, 37.6430], // Perşembe Medreseönü / Çaka Koyu
-  [41.1364, 37.6830], // Yason Burnu (Karadeniz'e uzanan doğal burun)
-  [41.1158, 37.7862], // Çam Burnu & Feneri
-  [41.0690, 37.7710], // Perşembe Vona Limanı
-  [41.0380, 37.8060], // Altınordu Efirli Koyu sahili
-  [41.0150, 37.8350], // Kumbaşı sahili
-  [40.9935, 37.8740], // Ordu Taşbaşı & Şehir Rıhtımı
-  [40.9735, 37.9370], // Melet Irmağı Ağzı
-  [40.9650, 38.0100], // Turnasuyu sahili
-  [40.9655, 38.0795], // Gülyalı Balıkçı Barınağı Mendirek Ucu
-  [40.9580, 38.1500]  // Ordu-Giresun sınırı
+  [41.4580, 36.0845],
+  [41.3730, 36.1820],
+  [41.3690, 36.2185],
+  [41.3355, 36.2810],
+  [41.3185, 36.3265],
+  [41.3090, 36.3630],
+  [41.2915, 36.3645],
+  [41.2840, 36.3835],
+  [41.2505, 36.4740],
+  [41.2520, 36.5600],
+  [41.2800, 36.6500],
+  [41.3780, 36.6870],
+  [41.3200, 36.7800],
+  [41.2490, 36.7230],
+  [41.2280, 36.9700],
+  [41.2210, 37.0370],
+  [41.1985, 37.1145],
+  [41.1710, 37.1960],
+  [41.1435, 37.2450],
+  [41.1365, 37.2640],
+  [41.1290, 37.2710],
+  [41.1355, 37.2915],
+  [41.1200, 37.3340],
+  [41.0760, 37.4065],
+  [41.0450, 37.4500],
+  [41.0345, 37.5055],
+  [41.0535, 37.5705],
+  [41.1015, 37.6430],
+  [41.1364, 37.6830],
+  [41.1158, 37.7862],
+  [41.0690, 37.7710],
+  [41.0380, 37.8060],
+  [41.0150, 37.8350],
+  [40.9935, 37.8740],
+  [40.9735, 37.9370],
+  [40.9650, 38.0100],
+  [40.9655, 38.0795],
+  [40.9580, 38.1500]
 ];
 
-// Doğrulanmış kıyı mera ve referans noktaları (Toplam 30 nokta: 13 Samsun, 17 Ordu).
-// TÜM NOKTALAR YAKINLAŞTIRILMIŞ HARİTADA SU VE MENDİREK GEOMETRİSİNE GÖRE DOĞRULANMIŞTIR.
-// ŞEHİR İÇİ, SOKAK VEYA İÇ KESİM KARASAL NOKTALAR İÇERMEZ.
-// Doğrulama YALNIZCA fiziki kıyı yapısının veya coğrafi noktanın haritada varlığı ile sınırlıdır.
-// Balık verimi, su altı derinliği veya güvenlik doğrulanmamıştır.
+// Mevcut 30 avlak noktası korunmuştur.
 export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
-  // --- SAMSUN KIYILARI (13 Nokta) ---
   {
     id: 'samsun-derekoy',
     name: 'Dereköy Balıkçı Barınağı & Mendirek',
@@ -161,7 +156,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     verificationStatus: 'FIZIKI_YAPI_TEYITLI',
     verificationBadge: 'Fiziki Yapı Teyitli (Mendirek)',
     verificationNote: 'Yalnızca taş blok mendirek yapısının harita katmanındaki fiziki varlığı teyitlidir. Balık verimi, su derinliği ve güvenlik durumu doğrulanmamıştır.',
-    verifiedGeoFeature: 'Karadeniz\'e uzanan yapay taş blok mendirek yapısı',
+    verifiedGeoFeature: 'Karadeniz’e uzanan yapay taş blok mendirek yapısı',
     commonTargetSpecies: ['İstavrit', 'Çinekop', 'Lüfer', 'Mezgit'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Kayalık ve yosunlu taş zemin; kayma riski. Akıntılı havalarda dip takımı takılabilir.'
@@ -193,7 +188,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
     verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
     verificationNote: 'Yalnızca Mert Irmağı ağzı su kavşağının coğrafi konumu teyitlidir. Balık verimi, su derinliği, kum bankı değişkenliği ve güvenlik durumu doğrulanmamıştır.',
-    verifiedGeoFeature: 'Mert Irmağı\'nın Karadeniz ile buluştuğu kumsal alüvyon sahil',
+    verifiedGeoFeature: 'Mert Irmağı’nın Karadeniz ile buluştuğu kumsal alüvyon sahil',
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kefal', 'Kalkan'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Yağmur sonrası bulanık su; dip akıntısı ve değişken sığ kum bankları.'
@@ -240,7 +235,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     locationType: 'Nehir / Dere Ağzı',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
     verificationBadge: 'Coğrafi Referans Noktası (Delta Ağzı)',
-    verificationNote: 'Yeşilırmak\'ın denize karıştığı delta en kuzey ucunun coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verificationNote: 'Yeşilırmak’ın denize karıştığı delta en kuzey ucunun coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Yeşilırmak deltası en kuzey alüvyon burun ve dere ağzı',
     commonTargetSpecies: ['Levrek', 'Kalkan', 'Minekop', 'Kefal'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
@@ -294,8 +289,6 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Sığ eğimli kumsal; rüzgarlı havalarda dip dalgası oluşur.'
   },
-
-  // --- ORDU KIYILARI (17 Nokta) ---
   {
     id: 'unye-akcay',
     name: 'Akçay Deresi Ağzı (Samsun-Ordu Sınırı)',
@@ -386,7 +379,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     locationType: 'Nehir / Dere Ağzı',
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
     verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
-    verificationNote: 'Cevizdere\'nin denize karıştığı ağız hattının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
+    verificationNote: 'Cevizdere’nin denize karıştığı ağız hattının coğrafi konumu teyitlidir. Balık verimi ve güvenlik doğrulanmamıştır.',
     verifiedGeoFeature: 'Kanyon ağzı çakıllı ve kumul dere-deniz kavşağı',
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kefal'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
@@ -467,7 +460,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
     verificationBadge: 'Coğrafi Referans Noktası (Doğal Burun)',
     verificationNote: 'Yalnızca Yason Burnu doğal kara çıkıntısının coğrafi konumu teyitlidir. Balık verimi, su altı derinliği, akıntı şiddeti ve güvenlik doğrulanmamıştır.',
-    verifiedGeoFeature: 'Karadeniz\'e dik uzanan tarihi Yason Burnu doğal kaya dili',
+    verifiedGeoFeature: 'Karadeniz’e dik uzanan tarihi Yason Burnu doğal kaya dili',
     commonTargetSpecies: ['Lüfer', 'Palamut', 'Levrek', 'İstavrit'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Şiddetli burun akıntısı ve ters dalga; kayalık üzerinde dikkatli olunmalı.'
@@ -547,7 +540,7 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
     verificationStatus: 'COGRAFI_REFERANS_NOKTASI',
     verificationBadge: 'Coğrafi Referans Noktası (Dere Ağzı)',
     verificationNote: 'Yalnızca Melet Irmağı ağzı sahil kavşağının coğrafi konumu teyitlidir. Balık verimi, derinlik, taban akıntısı ve güvenlik doğrulanmamıştır.',
-    verifiedGeoFeature: 'Melet Irmağı\'nın denize karıştığı çakıl ve kumsal hat',
+    verifiedGeoFeature: 'Melet Irmağı’nın denize karıştığı çakıl ve kumsal hat',
     commonTargetSpecies: ['Levrek', 'Minekop', 'Kalkan', 'Kefal'],
     depthStatus: 'Doğrulanmış batimetri ölçümü bulunmuyor',
     cautions: 'Irmak akıntısı ve çakıllı değişken zemin.'
@@ -570,43 +563,204 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
   }
 ];
 
-// Helper to calculate shortest distance (in km) from a point to a segment [p1, p2]
+// GeoJSON dosyası Vite tarafından ham metin olarak içe aktarılır.
+import samsunOrduLandRaw from './samsunOrduLand.geojson?raw';
+
+type Position = [number, number]; // [longitude, latitude]
+type LinearRing = Position[];
+type PolygonCoordinates = LinearRing[];
+
+type LandGeometry =
+  | { type: 'Polygon'; coordinates: PolygonCoordinates }
+  | { type: 'MultiPolygon'; coordinates: PolygonCoordinates[] };
+
+type LandFeatureCollection = {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    properties?: Record<string, unknown>;
+    geometry: LandGeometry | null;
+  }>;
+};
+
+const LAND_GEOJSON = JSON.parse(samsunOrduLandRaw) as LandFeatureCollection;
+const COASTAL_BAND_KM = 0.45;
+const CLIP_EDGE_TOLERANCE = 0.0002;
+
+function isFiniteCoordinate(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
+function isWithinBounds(lat: number, lng: number): boolean {
+  return lng >= 36.05 && lng <= 38.20 && lat >= 40.85 && lat <= 41.50;
+}
+
 function distanceToSegmentKm(
-  pLat: number, pLng: number,
-  aLat: number, aLng: number,
-  bLat: number, bLng: number
-): { distanceKm: number; crossProduct: number } {
-  const avgLat = ((aLat + bLat) / 2) * (Math.PI / 180);
-  const kx = 111.32 * Math.cos(avgLat);
-  const ky = 110.57;
+  pLat: number,
+  pLng: number,
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number
+): number {
+  const averageLatitude = ((aLat + bLat + pLat) / 3) * (Math.PI / 180);
+  const kmPerLongitudeDegree = 111.32 * Math.cos(averageLatitude);
+  const kmPerLatitudeDegree = 110.57;
 
-  const bx = (bLng - aLng) * kx;
-  const by = (bLat - aLat) * ky;
-  const px = (pLng - aLng) * kx;
-  const py = (pLat - aLat) * ky;
+  const ax = aLng * kmPerLongitudeDegree;
+  const ay = aLat * kmPerLatitudeDegree;
+  const bx = bLng * kmPerLongitudeDegree;
+  const by = bLat * kmPerLatitudeDegree;
+  const px = pLng * kmPerLongitudeDegree;
+  const py = pLat * kmPerLatitudeDegree;
 
-  const segLenSq = bx * bx + by * by;
-  let t = 0;
-  if (segLenSq > 0) {
-    t = (px * bx + py * by) / segLenSq;
-    t = Math.max(0, Math.min(1, t));
+  const dx = bx - ax;
+  const dy = by - ay;
+  const segmentLengthSquared = dx * dx + dy * dy;
+
+  const t = segmentLengthSquared === 0
+    ? 0
+    : Math.max(
+        0,
+        Math.min(
+          1,
+          ((px - ax) * dx + (py - ay) * dy) / segmentLengthSquared
+        )
+      );
+
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function pointInRing(lat: number, lng: number, ring: LinearRing): boolean {
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+
+    const intersects =
+      (yi > lat) !== (yj > lat) &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+
+    if (intersects) inside = !inside;
   }
 
-  const projX = t * bx;
-  const projY = t * by;
+  return inside;
+}
 
-  const dx = px - projX;
-  const dy = py - projY;
-  const distanceKm = Math.sqrt(dx * dx + dy * dy);
+function pointInPolygon(
+  lat: number,
+  lng: number,
+  polygon: PolygonCoordinates
+): boolean {
+  if (polygon.length === 0 || !pointInRing(lat, lng, polygon[0])) {
+    return false;
+  }
 
-  // 2D cross product: (B - A) x (P - A). Positive = North of coast (Sea in Black Sea sector)
-  const crossProduct = bx * py - by * px;
+  // İç halkalar poligon içindeki boşluklardır.
+  for (let i = 1; i < polygon.length; i++) {
+    if (pointInRing(lat, lng, polygon[i])) {
+      return false;
+    }
+  }
 
-  return { distanceKm, crossProduct };
+  return true;
+}
+
+function isLandPoint(lat: number, lng: number): boolean {
+  for (const feature of LAND_GEOJSON.features) {
+    const geometry = feature.geometry;
+    if (!geometry) continue;
+
+    if (geometry.type === 'Polygon') {
+      if (pointInPolygon(lat, lng, geometry.coordinates)) {
+        return true;
+      }
+    } else if (geometry.type === 'MultiPolygon') {
+      if (
+        geometry.coordinates.some(polygon =>
+          pointInPolygon(lat, lng, polygon)
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isArtificialClipEdge(a: Position, b: Position): boolean {
+  const [aLng, aLat] = a;
+  const [bLng, bLat] = b;
+
+  const westEdge =
+    Math.abs(aLng - 36.05) < CLIP_EDGE_TOLERANCE &&
+    Math.abs(bLng - 36.05) < CLIP_EDGE_TOLERANCE;
+
+  const eastEdge =
+    Math.abs(aLng - 38.20) < CLIP_EDGE_TOLERANCE &&
+    Math.abs(bLng - 38.20) < CLIP_EDGE_TOLERANCE;
+
+  const southEdge =
+    Math.abs(aLat - 40.85) < CLIP_EDGE_TOLERANCE &&
+    Math.abs(bLat - 40.85) < CLIP_EDGE_TOLERANCE;
+
+  const northEdge =
+    Math.abs(aLat - 41.50) < CLIP_EDGE_TOLERANCE &&
+    Math.abs(bLat - 41.50) < CLIP_EDGE_TOLERANCE;
+
+  return westEdge || eastEdge || southEdge || northEdge;
+}
+
+function distanceToLandBoundaryKm(lat: number, lng: number): number {
+  let minimumDistance = Infinity;
+
+  const visitRing = (ring: LinearRing) => {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const a = ring[i];
+      const b = ring[i + 1];
+
+      // Veri kesiminden kaynaklanan yapay sınırlar gerçek kıyı sayılmaz.
+      if (isArtificialClipEdge(a, b)) continue;
+
+      const distance = distanceToSegmentKm(
+        lat,
+        lng,
+        a[1],
+        a[0],
+        b[1],
+        b[0]
+      );
+
+      if (distance < minimumDistance) {
+        minimumDistance = distance;
+      }
+    }
+  };
+
+  for (const feature of LAND_GEOJSON.features) {
+    const geometry = feature.geometry;
+    if (!geometry) continue;
+
+    if (geometry.type === 'Polygon') {
+      geometry.coordinates.forEach(visitRing);
+    } else if (geometry.type === 'MultiPolygon') {
+      geometry.coordinates.forEach(polygon =>
+        polygon.forEach(visitRing)
+      );
+    }
+  }
+
+  return minimumDistance;
 }
 
 export interface PointClassificationResult {
-  zone: 'Deniz / Açık Su' | 'Kıyı Şeridi (Sahil / Kıyı Bandı)' | 'Karasal Alan (İç Kesim)' | 'Kapsam Dışı Alan';
+  zone:
+    | 'Deniz / Açık Su'
+    | 'Kıyı Şeridi (Sahil / Kıyı Bandı)'
+    | 'Karasal Alan (İç Kesim)'
+    | 'Kapsam Dışı Alan';
   zoneType: 'deniz' | 'kiyi' | 'kara' | 'kapsam_disi';
   isWithinBounds: boolean;
   distanceToCoastKm: number | null;
@@ -616,92 +770,105 @@ export interface PointClassificationResult {
   dataNotice: string;
 }
 
-// Geometric coast classification using the 38-segment approximate reference polyline
-export function classifyPointGeography(lat: number, lng: number): PointClassificationResult {
-  const isWithinBounds = lng >= 36.05 && lng <= 38.20 && lat >= 40.85 && lat <= 41.50;
+function distanceToSpotKm(
+  lat: number,
+  lng: number,
+  spot: VerifiedCoastalSpot
+): number {
+  const averageLatitude = ((spot.lat + lat) / 2) * (Math.PI / 180);
+  const latitudeDistance = (spot.lat - lat) * 110.57;
+  const longitudeDistance =
+    (spot.lng - lng) * 111.32 * Math.cos(averageLatitude);
 
-  let nearestSpot: VerifiedCoastalSpot | null = null;
-  let minSpotDistanceKm = Infinity;
+  return Math.hypot(latitudeDistance, longitudeDistance);
+}
 
-  VERIFIED_COASTAL_SPOTS.forEach(spot => {
-    const avgLat = ((spot.lat + lat) / 2) * (Math.PI / 180);
-    const dLatKm = (spot.lat - lat) * 110.57;
-    const dLngKm = (spot.lng - lng) * 111.32 * Math.cos(avgLat);
-    const dist = Math.sqrt(dLatKm * dLatKm + dLngKm * dLngKm);
-    if (dist < minSpotDistanceKm) {
-      minSpotDistanceKm = dist;
-      nearestSpot = spot;
-    }
-  });
+export function classifyPointGeography(
+  lat: number,
+  lng: number
+): PointClassificationResult {
+  const withinBounds =
+    isFiniteCoordinate(lat, lng) && isWithinBounds(lat, lng);
 
-  if (!isWithinBounds) {
+  if (!withinBounds) {
     return {
       zone: 'Kapsam Dışı Alan',
       zoneType: 'kapsam_disi',
       isWithinBounds: false,
       distanceToCoastKm: null,
-      description: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.05°D - 38.20°D) dışındadır. Bu alan için kıyı referans çizgisi bulunmamaktadır.',
+      description:
+        'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.05°D–38.20°D) dışındadır veya geçerli bir koordinat değildir.',
       nearestSpot: null,
       distanceToNearestSpotKm: null,
-      dataNotice: 'Koordinat bölgesel analiz sınırları dışındadır; tahmin yapılmamaktadır.'
+      dataNotice:
+        'Koordinat bölgesel analiz sınırları dışındadır; coğrafi sınıflandırma yapılmamıştır.'
     };
   }
 
-  let minCoastDistKm = Infinity;
-  let dominantCrossProduct = 0;
+  let nearestSpot: VerifiedCoastalSpot | null = null;
+  let minSpotDistanceKm = Infinity;
 
-  for (let i = 0; i < SAMSUN_ORDU_COASTLINE.length - 1; i++) {
-    const [aLat, aLng] = SAMSUN_ORDU_COASTLINE[i];
-    const [bLat, bLng] = SAMSUN_ORDU_COASTLINE[i + 1];
+  for (const spot of VERIFIED_COASTAL_SPOTS) {
+    const distance = distanceToSpotKm(lat, lng, spot);
 
-    const { distanceKm, crossProduct } = distanceToSegmentKm(lat, lng, aLat, aLng, bLat, bLng);
-    if (distanceKm < minCoastDistKm) {
-      minCoastDistKm = distanceKm;
-      dominantCrossProduct = crossProduct;
+    if (distance < minSpotDistanceKm) {
+      minSpotDistanceKm = distance;
+      nearestSpot = spot;
     }
   }
 
-  const roundedCoastDistKm = Math.round(minCoastDistKm * 100) / 100;
-  const roundedSpotDistKm = Math.round(minSpotDistanceKm * 10) / 10;
-  const dataNotice = 'Yaklaşık, elle tanımlanmış kıyı referans çizgisi (38 segment) kullanılarak hesaplanmıştır. Resmî veya doğrulanmış kıyı geometrisi değildir; 450 metre sınırı yaklaşık bir sınıflandırma eşiğidir.';
+  const coastDistanceKm = distanceToLandBoundaryKm(lat, lng);
 
-  // Within 450 meters (0.45 km) of reference coastline = Coastal Strip
-  if (minCoastDistKm <= 0.45) {
+  const roundedCoastDistanceKm = Number.isFinite(coastDistanceKm)
+    ? Math.round(coastDistanceKm * 100) / 100
+    : null;
+
+  const roundedSpotDistanceKm = Number.isFinite(minSpotDistanceKm)
+    ? Math.round(minSpotDistanceKm * 10) / 10
+    : null;
+
+  const dataNotice =
+    'Sınıflandırma, samsunOrduLand.geojson içindeki genelleştirilmiş kara poligonuna dayanır. Bu veri resmî kıyı kenar çizgisi veya batimetri değildir; 450 metre kıyı bandı yaklaşık bir eşiktir.';
+
+  if (coastDistanceKm <= COASTAL_BAND_KM) {
     return {
       zone: 'Kıyı Şeridi (Sahil / Kıyı Bandı)',
       zoneType: 'kiyi',
       isWithinBounds: true,
-      distanceToCoastKm: roundedCoastDistKm,
-      description: `Seçilen koordinat elle tanımlanmış kıyı referans çizgisine ~${Math.round(minCoastDistKm * 1000)} metre mesafededir (yaklaşık sınıflandırma eşiği: 450 m). Resmî veya doğrulanmış kıyı kenar çizgisi değildir.`,
+      distanceToCoastKm: roundedCoastDistanceKm,
+      description:
+        `Seçilen koordinat GeoJSON kara poligonu sınırına yaklaşık ${Math.round(coastDistanceKm * 1000)} metre mesafededir. Kıyı bandı eşiği ${COASTAL_BAND_KM * 1000} metredir.`,
       nearestSpot,
-      distanceToNearestSpotKm: roundedSpotDistKm,
+      distanceToNearestSpotKm: roundedSpotDistanceKm,
       dataNotice
     };
   }
 
-  // If cross product is positive (north of coast): Marine area
-  if (dominantCrossProduct > 0) {
+  if (isLandPoint(lat, lng)) {
     return {
-      zone: 'Deniz / Açık Su',
-      zoneType: 'deniz',
+      zone: 'Karasal Alan (İç Kesim)',
+      zoneType: 'kara',
       isWithinBounds: true,
-      distanceToCoastKm: roundedCoastDistKm,
-      description: `Seçilen nokta elle tanımlanmış kıyı referans çizgisinin ~${roundedCoastDistKm} km kuzeyinde açık deniz sahasındadır. Yalnızca tekne veya bot ile ulaşılabilir.`,
-      nearestSpot: minSpotDistanceKm <= 3.5 ? nearestSpot : null,
-      distanceToNearestSpotKm: minSpotDistanceKm <= 3.5 ? roundedSpotDistKm : null,
+      distanceToCoastKm: roundedCoastDistanceKm,
+      description:
+        `Seçilen koordinat GeoJSON kara poligonunun içindedir; poligon sınırına yaklaşık ${roundedCoastDistanceKm ?? 'bilinmeyen'} km mesafededir.`,
+      nearestSpot: minSpotDistanceKm <= 3 ? nearestSpot : null,
+      distanceToNearestSpotKm:
+        minSpotDistanceKm <= 3 ? roundedSpotDistanceKm : null,
       dataNotice
     };
   }
 
-  // Otherwise inland
   return {
-    zone: 'Karasal Alan (İç Kesim)',
-    zoneType: 'kara',
+    zone: 'Deniz / Açık Su',
+    zoneType: 'deniz',
     isWithinBounds: true,
-    distanceToCoastKm: roundedCoastDistKm,
-    description: `Seçilen nokta elle tanımlanmış kıyı referans çizgisinin ~${roundedCoastDistKm} km güneyinde karasal alandadır. Deniz kıyısına veya liman bölgesine yaklaşınız.`,
-    nearestSpot: minSpotDistanceKm <= 3.0 ? nearestSpot : null,
-    distanceToNearestSpotKm: minSpotDistanceKm <= 3.0 ? roundedSpotDistKm : null,
+    distanceToCoastKm: roundedCoastDistanceKm,
+    description:
+      `Seçilen koordinat GeoJSON kara poligonunun dışındadır; poligon sınırına yaklaşık ${roundedCoastDistanceKm ?? 'bilinmeyen'} km mesafededir. Bu sonuç deniz derinliği veya güvenli erişim bilgisi vermez.`,
+    nearestSpot: minSpotDistanceKm <= 3.5 ? nearestSpot : null,
+    distanceToNearestSpotKm:
+      minSpotDistanceKm <= 3.5 ? roundedSpotDistanceKm : null,
     dataNotice
   };
 }
