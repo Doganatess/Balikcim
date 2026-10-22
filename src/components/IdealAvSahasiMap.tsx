@@ -3,16 +3,12 @@ import L from 'leaflet';
 import { 
   Crosshair, 
   ChevronDown, 
-  Compass, 
   Maximize2, 
   MapPin, 
   X, 
   AlertCircle, 
-  Info, 
   RotateCcw,
-  Layers,
-  HelpCircle,
-  ShieldAlert
+  HelpCircle
 } from 'lucide-react';
 import { Region } from '../data/regionsData';
 import { FishSpecies, FISH_CATALOG } from '../data/fishData';
@@ -45,7 +41,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [fishDropdownOpen, setFishDropdownOpen] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeTileLayer, setActiveTileLayer] = useState<'osm' | 'dark'>('dark');
 
   // Currently selected point (either a spot or tapped coordinate)
   // Default to Ünye Liman Mendireği
@@ -60,7 +55,49 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
-  // 1. Initial Leaflet Map Setup (Runs ONCE on mount)
+  // Helper for red target pin icon
+  const createPinIcon = useCallback((): L.DivIcon => {
+    return L.divIcon({
+      className: 'custom-target-pin',
+      html: `
+        <div style="
+          position: relative;
+          transform: translate(-14px, -30px);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          pointer-events: none;
+        ">
+          <div style="
+            background: #dc2626;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.7);
+            border: 2px solid #ffffff;
+          ">
+            <span style="transform: rotate(45deg); font-size: 12px; font-weight: 800;">📍</span>
+          </div>
+          <div style="
+            width: 8px;
+            height: 4px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            margin-top: 2px;
+          "></div>
+        </div>
+      `,
+      iconSize: [28, 30],
+      iconAnchor: [14, 30]
+    });
+  }, []);
+
+  // 1. Initial Leaflet Map Setup (Runs ONCE on mount with OpenStreetMap)
   useEffect(() => {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return; // Prevent double initialization
@@ -82,15 +119,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       // Zoom control in top-right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Create initial Tile Layer
-      const initialTileUrl = activeTileLayer === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-      const tileLayer = L.tileLayer(initialTileUrl, {
-        attribution: activeTileLayer === 'dark'
-          ? '&copy; <a href="https://carto.com/" target="_blank">CARTO</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
-          : '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> Katkıda Bulunanlar',
+      // Stable, keyless OpenStreetMap tile layer (No CARTO or API key required)
+      const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> Katkıda Bulunanlar',
         maxZoom: 19
       });
       tileLayer.addTo(map);
@@ -158,12 +189,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         // Informative popup
         marker.bindPopup(`
           <div style="font-size: 12px; line-height: 1.45; font-family: system-ui, sans-serif;">
-            <div style="font-weight: 700; color: #38bdf8;">${spot.name}</div>
-            <div style="color: #94a3b8; font-size: 11px;">${spot.city} (${spot.district})</div>
+            <div style="font-weight: 700; color: #0284c7;">${spot.name}</div>
+            <div style="color: #64748b; font-size: 11px;">${spot.city} (${spot.district})</div>
             <div style="margin-top: 3px; font-weight: 600; color: ${iconColor}; font-size: 11px;">
               ${spot.verificationBadge}
             </div>
-            <div style="font-size: 10px; color: #cbd5e1; margin-top: 2px;">
+            <div style="font-size: 10px; color: #334155; margin-top: 2px;">
               ${spot.locationType}
             </div>
           </div>
@@ -199,45 +230,16 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [createPinIcon]);
 
-  // 2. Dynamic Tile Layer Switcher: Swaps layer WITHOUT restarting map
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-
-    // Remove existing tile layer cleanly
-    if (tileLayerRef.current) {
-      map.removeLayer(tileLayerRef.current);
-      tileLayerRef.current = null;
-    }
-
-    const tileUrl = activeTileLayer === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    const attribution = activeTileLayer === 'dark'
-      ? '&copy; <a href="https://carto.com/" target="_blank">CARTO</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
-      : '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> Katkıda Bulunanlar';
-
-    const newTileLayer = L.tileLayer(tileUrl, {
-      attribution,
-      maxZoom: 19
-    });
-
-    newTileLayer.addTo(map);
-    newTileLayer.bringToBack();
-    tileLayerRef.current = newTileLayer;
-  }, [activeTileLayer]);
-
-  // 3. Move target pin seamlessly when selectedCoord changes
+  // 2. Move target pin seamlessly when selectedCoord changes
   useEffect(() => {
     if (selectedMarkerRef.current) {
       selectedMarkerRef.current.setLatLng([selectedCoord.lat, selectedCoord.lng]);
     }
   }, [selectedCoord]);
 
-  // 4. Mobile resize & visibility watcher
+  // 3. Mobile resize & visibility watcher
   useEffect(() => {
     const handleResize = () => {
       if (mapInstanceRef.current) {
@@ -253,48 +255,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       clearTimeout(timer);
     };
   }, [isFullscreen]);
-
-  // Helper for red target pin icon
-  function createPinIcon(): L.DivIcon {
-    return L.divIcon({
-      className: 'custom-target-pin',
-      html: `
-        <div style="
-          position: relative;
-          transform: translate(-14px, -30px);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          pointer-events: none;
-        ">
-          <div style="
-            background: #dc2626;
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.7);
-            border: 2px solid #ffffff;
-          ">
-            <span style="transform: rotate(45deg); font-size: 12px; font-weight: 800;">📍</span>
-          </div>
-          <div style="
-            width: 8px;
-            height: 4px;
-            background: rgba(0,0,0,0.6);
-            border-radius: 50%;
-            margin-top: 2px;
-          "></div>
-        </div>
-      `,
-      iconSize: [28, 30],
-      iconAnchor: [14, 30]
-    });
-  }
 
   // Handle map reset view
   const handleResetView = useCallback(() => {
@@ -370,7 +330,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         </div>
       </div>
 
-      {/* Real Interactive Leaflet Map Container */}
+      {/* Real Interactive Leaflet Map Container with Clean OpenStreetMap Tiles */}
       <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
         isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[330px] sm:h-[390px]'
       }`}>
@@ -397,7 +357,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Map Top-Left Quick Actions */}
+        {/* Map Top-Left Quick Actions (Simplified to reliable Samsun-Ordu reset) */}
         <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
           <button
             onClick={handleResetView}
@@ -406,20 +366,6 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           >
             <RotateCcw className="w-3 h-3 text-cyan-400" />
             <span>Samsun–Ordu</span>
-          </button>
-
-          {/* Layer switcher button with visual indicator of current layer */}
-          <button
-            onClick={() => setActiveTileLayer(prev => prev === 'dark' ? 'osm' : 'dark')}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md backdrop-blur-md border transition ${
-              activeTileLayer === 'osm'
-                ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500'
-                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-cyan-400'
-            }`}
-            title="Harita Altlığını Değiştir (OSM / CartoDB)"
-          >
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{activeTileLayer === 'dark' ? 'CartoDB' : 'Standart OSM'}</span>
           </button>
         </div>
 
@@ -614,7 +560,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         {/* Cautions, Safety & Data Source Attribution */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
           <div>
-            <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi (Eşik: ~450 m; resmî kadastro verisi değildir)
+            <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi (Eşik: ~450 m)
           </div>
           <div className="text-amber-400/90 font-mono">
             ⚠ Canlı rüzgâr/dalga sensörü bağlı değildir. Güvenlik için yerel hava durumunu kontrol ediniz.
