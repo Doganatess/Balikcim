@@ -51,6 +51,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const watchIdRef = useRef<number | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
+  const isLocatingRef = useRef(false);
+  const isFollowingUserRef = useRef(false);
 
   const [fishDropdownOpen, setFishDropdownOpen] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -62,6 +64,24 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [geoErrorMsg, setGeoErrorMsg] = useState<string | null>(null);
   const [isUserOutsideRegion, setIsUserOutsideRegion] = useState(false);
+
+  const setLocatingState = useCallback((next: boolean) => {
+    isLocatingRef.current = next;
+    setIsLocating(next);
+  }, []);
+
+  const setFollowState = useCallback((next: boolean) => {
+    isFollowingUserRef.current = next;
+    setIsFollowingUser(next);
+  }, []);
+
+  useEffect(() => {
+    isLocatingRef.current = isLocating;
+  }, [isLocating]);
+
+  useEffect(() => {
+    isFollowingUserRef.current = isFollowingUser;
+  }, [isFollowingUser]);
 
   // NASA GIBS Real Sea Surface Temperature (SST) Satellite Layer states
   const [isSstActive, setIsSstActive] = useState(false);
@@ -226,7 +246,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
       // If user drags map manually, disable auto-following so map doesn't fight the user
       map.on('dragstart', () => {
-        setIsFollowingUser(false);
+        setFollowState(false);
       });
 
       mapInstanceRef.current = map;
@@ -245,7 +265,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         mapInstanceRef.current = null;
       }
     };
-  }, [createPinIcon]);
+  }, [createPinIcon, setFollowState]);
 
   // 2. Real NASA GIBS Satellite Sea Surface Temperature (SST) Layer Management
   useEffect(() => {
@@ -300,7 +320,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       setSstError('Uydu katmanı servisine ulaşılamadı.');
       setSstLoading(false);
     }
-}, [isSstActive]);
+  }, [isSstActive]);
 
   // Update opacity dynamically without re-creating layer
   useEffect(() => {
@@ -397,8 +417,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const toggleLocationTracking = useCallback(() => {
     setGeoErrorMsg(null);
 
-    // If currently tracking, stop it
-    if (isLocating) {
+    if (isLocatingRef.current) {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -411,8 +430,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         userAccuracyCircleRef.current.remove();
         userAccuracyCircleRef.current = null;
       }
-      setIsLocating(false);
-      setIsFollowingUser(false);
+      setLocatingState(false);
+      setFollowState(false);
       setUserCoords(null);
       setIsUserOutsideRegion(false);
       return;
@@ -423,8 +442,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       return;
     }
 
-    setIsLocating(true);
-    setIsFollowingUser(true);
+    setLocatingState(true);
+    setFollowState(true);
 
     try {
       const watchId = navigator.geolocation.watchPosition(
@@ -475,7 +494,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           }
 
           // Auto-center if follow mode is active
-          if (isFollowingUser) {
+          if (isFollowingUserRef.current) {
             map.panTo([latitude, longitude], { animate: true });
           }
         },
@@ -489,8 +508,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             msg = 'Konum alma zaman aşımına uğradı. Tekrar deneyiniz.';
           }
           setGeoErrorMsg(msg);
-          setIsLocating(false);
-          setIsFollowingUser(false);
+          setLocatingState(false);
+          setFollowState(false);
         },
         {
           enableHighAccuracy: true,
@@ -501,15 +520,15 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       watchIdRef.current = watchId;
     } catch (e: any) {
       setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlantısı gereklidir).');
-      setIsLocating(false);
-      setIsFollowingUser(false);
+      setLocatingState(false);
+      setFollowState(false);
     }
-  }, [isLocating, isFollowingUser, createUserLocationIcon]);
+  }, [createUserLocationIcon, setFollowState, setLocatingState]);
 
   // Center on user location on-demand
   const handleCenterOnUser = () => {
     if (userCoords && mapInstanceRef.current) {
-      setIsFollowingUser(true);
+      setFollowState(true);
       mapInstanceRef.current.setView([userCoords.lat, userCoords.lng], 13, { animate: true });
     } else {
       toggleLocationTracking();
@@ -535,14 +554,14 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
   // Handle map reset view to Samsun-Ordu
   const handleResetView = useCallback(() => {
-    setIsFollowingUser(false);
+    setFollowState(false);
     if (mapInstanceRef.current) {
       mapInstanceRef.current.fitBounds(SAMSUN_ORDU_BOUNDS, {
         padding: [20, 20],
         maxZoom: 11
       });
     }
-  }, []);
+  }, [setFollowState]);
 
   // Compute coastline classification for currently selected coordinate
   const geoAnalysis: PointClassificationResult = classifyPointGeography(selectedCoord.lat, selectedCoord.lng);
@@ -680,7 +699,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
           {isLocating && (
             <button
-              onClick={() => setIsFollowingUser(!isFollowingUser)}
+              onClick={() => setFollowState(!isFollowingUserRef.current)}
               className={`px-2 py-1.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
                 isFollowingUser
                   ? 'bg-emerald-600 text-white border-emerald-400'
@@ -962,7 +981,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resm�� kadastro kıyı kenar çizgisi kullanılmamaktadır.
+              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisine göre sınırlı örnek düzeyde bir yakınlık değerlendirmesidir.
             </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
               <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
@@ -991,7 +1010,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               <span>{selectedSpot ? selectedSpot.depthStatus : 'Doğrulanmış batimetri ölçümü bulunmuyor'}</span>
             </div>
             <div className="text-[10px] text-slate-400 leading-tight">
-              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiyesi verilmemektedir.
+              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiye edilmez.
             </div>
           </div>
         </div>
@@ -1132,15 +1151,15 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div className="text-xs text-slate-300 leading-relaxed space-y-1.5">
             {activeQuickTab === 'mera' && (
               <>
-                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} teyitli/örnek nokta).</p>
-                <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir ağızları görülür.</p>
+                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} teyitli nokta)</p>
+                <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir ağızları; Gümüşhane, Çarşamba ve Terme bölgelerinde liman girişleri ve mendirekler dikkat çekmektedir.</p>
                 <p className="text-[10px] text-slate-500">Not: Kıyı yapısı sahada fırtına ve debiye bağlı olarak değişebilir; sahaya inmeden önce yerinde inceleme yapınız.</p>
               </>
             )}
             {activeQuickTab === 'saat' && (
               <>
                 <p><strong>Hedef Tür:</strong> {selectedFish.name} ({selectedFish.bestHours})</p>
-                <p><strong>Genel Bilgi:</strong> Karadeniz kıyılarında genellikle alacakaranlık, gün doğumu ve gün batımı saatleri yırtıcı türlerin kıyılaması açısından verimli olabilir.</p>
+                <p><strong>Genel Bilgi:</strong> Karadeniz kıyılarında genellikle alacakaranlık, gün doğumu ve gün batımı saatleri yırtıcı türlerin kıyılaması açısından verimli olabilir; bölgedeki rüzgar ve dalga koşulları bu saatleri değiştirebilir.</p>
               </>
             )}
             {activeQuickTab === 'yem' && (
@@ -1152,7 +1171,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             {activeQuickTab === 'olta' && (
               <>
                 <p><strong>Tavsiye Donanım:</strong> {selectedFish.bestTackle}</p>
-                <p><strong>Yasal Asgari Boy Limiti:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Su Ürünleri Tebliği av limitlerine uymak zorunludur).</p>
+                <p><strong>Yasal Asgari Boy Limiti:</strong> <span className="text-amber-400 font-semibold">{selectedFish.legalMinLength}</span> (Su Ürünleri Tebliği av limitlerine uymak zorunludur; mevzuat yerel uygulamaya göre değişebilir.)</p>
               </>
             )}
           </div>
