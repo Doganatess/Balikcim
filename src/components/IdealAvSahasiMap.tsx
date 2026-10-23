@@ -55,8 +55,25 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const isFollowingUserRef = useRef(false);
 
   const [fishDropdownOpen, setFishDropdownOpen] = useState(false);
+  const fishDropdownRef = useRef<HTMLDivElement | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Close fish dropdown when clicking or touching outside
+  useEffect(() => {
+    if (!fishDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (fishDropdownRef.current && !fishDropdownRef.current.contains(event.target as Node)) {
+        setFishDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [fishDropdownOpen]);
 
   // Geolocation states
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
@@ -294,23 +311,34 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         maxZoom: 18,
         opacity: sstOpacity,
         zIndex: 5,
-        attribution: '&copy; <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> · GHRSST MUR Deniz Yüzeyi Sıcaklığı (1 km / Günlük Analiz)',
+        attribution: '&copy; <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> · GHRSST MUR L4 (default/default)',
         crossOrigin: true,
+      });
+
+      let loadedTiles = 0;
+      let erroredTiles = 0;
+
+      sstLayer.on('loading', () => {
+        setSstLoading(true);
+        loadedTiles = 0;
+        erroredTiles = 0;
+      });
+
+      sstLayer.on('tileload', () => {
+        loadedTiles += 1;
+      });
+
+      sstLayer.on('tileerror', () => {
+        erroredTiles += 1;
       });
 
       sstLayer.on('load', () => {
         setSstLoading(false);
-        setSstError(null);
-      });
-
-      sstLayer.on('tileload', () => {
-        setSstLoading(false);
-        setSstError(null);
-      });
-
-      sstLayer.on('tileerror', () => {
-        setSstLoading(false);
-        setSstError('NASA GIBS katmanında tekil tile hatası oluştu; bu tek bir eşleme sorunu olabilir ve tüm katmanın tamamen çöktüğü anlamına gelmeyebilir.');
+        if (loadedTiles > 0) {
+          setSstError(null);
+        } else if (erroredTiles > 0) {
+          setSstError('NASA GIBS uydu döşemeleri yüklenemedi. Bağlantınızı veya servis durumunu kontrol ediniz.');
+        }
       });
 
       sstLayer.addTo(map);
@@ -525,15 +553,39 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
   }, [createUserLocationIcon, setFollowState, setLocatingState]);
 
-  // Center on user location on-demand
-  const handleCenterOnUser = () => {
-    if (userCoords && mapInstanceRef.current) {
+  // Center on user location on-demand or toggle tracking
+  const handleCenterOnUser = useCallback(() => {
+    if (!isLocatingRef.current) {
+      toggleLocationTracking();
+    } else if (userCoords && mapInstanceRef.current) {
       setFollowState(true);
       mapInstanceRef.current.setView([userCoords.lat, userCoords.lng], 13, { animate: true });
     } else {
       toggleLocationTracking();
     }
-  };
+  }, [toggleLocationTracking, userCoords, setFollowState]);
+
+  // Toggle user following state explicitly
+  const handleToggleFollow = useCallback(() => {
+    const nextFollow = !isFollowingUserRef.current;
+    setFollowState(nextFollow);
+    if (nextFollow && userCoords && mapInstanceRef.current) {
+      mapInstanceRef.current.panTo([userCoords.lat, userCoords.lng], { animate: true });
+    }
+  }, [setFollowState, userCoords]);
+
+  // Fullscreen toggle with map resize invalidation
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      }, 150);
+      return next;
+    });
+  }, []);
 
   // Mobile resize & visibility watcher
   useEffect(() => {
@@ -569,208 +621,268 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   return (
     <div id="av-sahasi" className="w-full max-w-4xl mx-auto px-4 sm:px-6 pt-2 pb-4">
       
-      {/* Header: Samsun – Ordu Kıyı Haritası · [Hedef Balık ▾] */}
-      <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Crosshair className="w-4 h-4 text-cyan-400 shrink-0" />
-          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
-            Samsun – Ordu Kıyı Haritası
-          </h2>
-          <span className="text-slate-500 font-light hidden sm:inline">·</span>
-          <div className="relative">
-            <button
-              onClick={() => setFishDropdownOpen(!fishDropdownOpen)}
-              className="flex items-center gap-1 text-sm sm:text-base font-bold text-cyan-400 hover:text-cyan-300 transition"
-              aria-label="Hedef Balık Seçimi"
-            >
-              <span>{selectedFish.name}</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-cyan-400 transition-transform ${fishDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
+      {/* Fullscreen Wrapper Mode or Standard Flow */}
+      <div className={isFullscreen ? "fixed inset-0 z-50 bg-[#091524] p-3 sm:p-5 flex flex-col overflow-y-auto" : "w-full"}>
+        
+        {/* Header: Samsun – Ordu Kıyı Haritası · [Hedef Balık ▾] */}
+        <div className="flex items-center justify-between mb-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Crosshair className="w-4 h-4 text-cyan-400 shrink-0" />
+            <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+              Samsun – Ordu Kıyı Haritası
+            </h2>
+            <span className="text-slate-500 font-light hidden sm:inline">·</span>
+            <div ref={fishDropdownRef} className="relative">
+              <button
+                onClick={() => setFishDropdownOpen(prev => !prev)}
+                className="flex items-center gap-1 text-sm sm:text-base font-bold text-cyan-400 hover:text-cyan-300 transition"
+                aria-label="Hedef Balık Seçimi"
+              >
+                <span>{selectedFish.name}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-cyan-400 transition-transform ${fishDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            {fishDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-[#0e1626] border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 max-h-72 overflow-y-auto">
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                  Hedef Balık Değiştir
-                </div>
-                {FISH_CATALOG.map((fish) => (
-                  <button
-                    key={fish.id}
-                    onClick={() => {
-                      onSelectFish(fish);
-                      setFishDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between hover:bg-slate-800 transition my-0.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{fish.emoji}</span>
-                      <div>
-                        <div className="font-bold text-slate-200">{fish.name}</div>
-                        <div className="text-[10px] text-slate-400">{fish.category}</div>
+              {fishDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-[#0e1626] border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 max-h-72 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                    Hedef Balık Değiştir
+                  </div>
+                  {FISH_CATALOG.map((fish) => (
+                    <button
+                      key={fish.id}
+                      onClick={() => {
+                        onSelectFish(fish);
+                        setFishDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between hover:bg-slate-800 transition my-0.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{fish.emoji}</span>
+                        <div>
+                          <div className="font-bold text-slate-200">{fish.name}</div>
+                          <div className="text-[10px] text-slate-400">{fish.category}</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-mono font-bold text-cyan-400">%{fish.currentScore}</div>
-                      <div className="text-[9px] text-slate-500">Model skoru</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                      <div className="text-right">
+                        <div className="text-xs font-mono font-bold text-cyan-400">%{fish.currentScore}</div>
+                        <div className="text-[9px] text-slate-500">Model skoru</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Region Scope Tag */}
+            <div className="flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+              <span>{filteredSpots.length} Mera Kayıtlı</span>
+            </div>
+
+            {isFullscreen && (
+              <button
+                onClick={toggleFullscreen}
+                className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1 border border-slate-600 transition"
+                title="Tam Ekrandan Çık"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Kapat</span>
+              </button>
             )}
           </div>
         </div>
 
-        {/* Region Scope Tag */}
-        <div className="flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full shrink-0">
-          <span>{filteredSpots.length} Mera Kayıtlı</span>
+        {/* Real Interactive Leaflet Map Container - Clean Unobstructed Canvas */}
+        <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
+          isFullscreen ? 'h-[56vh] sm:h-[64vh] shrink-0' : 'h-[340px] sm:h-[410px]'
+        }`}>
+          <div 
+            ref={mapContainerRef} 
+            className="w-full h-full z-10"
+            style={{ touchAction: 'pan-x pan-y' }}
+          />
+
+          {mapError && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-[#091524] text-center">
+              <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
+              <h3 className="text-sm font-bold text-white mb-1">Harita Yüklenemedi</h3>
+              <p className="text-xs text-slate-400 max-w-sm mb-3">{mapError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-1.5 rounded-xl bg-cyan-600 text-white text-xs font-bold"
+              >
+                Yeniden Dene
+              </button>
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Real Interactive Leaflet Map Container */}
-      <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
-        isFullscreen ? 'fixed inset-3 z-50 max-w-none h-[calc(100vh-1.5rem)]' : 'h-[340px] sm:h-[410px]'
-      }`}>
-        <div 
-          ref={mapContainerRef} 
-          className="w-full h-full z-10"
-          style={{ touchAction: 'pan-x pan-y' }}
-        />
-
-        {mapError && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-[#091524] text-center">
-            <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
-            <h3 className="text-sm font-bold text-white mb-1">Harita Yüklenemedi</h3>
-            <p className="text-xs text-slate-400 max-w-sm mb-3">{mapError}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-1.5 rounded-xl bg-cyan-600 text-white text-xs font-bold"
-            >
-              Yeniden Dene
-            </button>
-          </div>
-        )}
-
+        {/* Warning and Notification Banners (Displayed Outside the Map) */}
         {isUserOutsideRegion && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-xl backdrop-blur-md">
+          <div className="mt-2.5 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-md backdrop-blur-md flex items-center justify-between gap-2">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <strong>Bölge Dışı Konum:</strong> GPS konumunuz tespit edildi ancak Samsun–Ordu kıyı analiz bölgesinin dışındasınız.
               </div>
             </div>
+            <button 
+              onClick={() => setIsUserOutsideRegion(false)} 
+              className="p-1 text-slate-400 hover:text-white shrink-0"
+              aria-label="Bildirimi Kapat"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
         {geoErrorMsg && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-xs z-30 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-xl backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                <span>{geoErrorMsg}</span>
-              </div>
-              <button onClick={() => setGeoErrorMsg(null)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-3 h-3" />
-              </button>
+          <div className="mt-2.5 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-md backdrop-blur-md flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span>{geoErrorMsg}</span>
             </div>
+            <button 
+              onClick={() => setGeoErrorMsg(null)} 
+              className="p-1 text-slate-400 hover:text-white shrink-0"
+              aria-label="Hata Mesajını Kapat"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20 flex-wrap">
-          <button
-            onClick={handleResetView}
-            className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md"
-            title="Samsun - Ordu Genel Görünüme Sıfırla"
-          >
-            <RotateCcw className="w-3 h-3 text-cyan-400" />
-            <span>Samsun–Ordu</span>
-          </button>
-
-          <button
-            onClick={handleCenterOnUser}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
-              isLocating 
-                ? 'bg-cyan-600 text-white border-cyan-400 shadow-cyan-500/20' 
-                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-cyan-400'
-            }`}
-            title={isLocating ? 'Konum takibi aktif (Tıklayarak odaklanın veya kapatın)' : 'Konumumu Haritada Göster'}
-          >
-            <Navigation className={`w-3 h-3 ${isLocating ? 'fill-white animate-pulse' : 'text-cyan-400'}`} />
-            <span>Konumum</span>
-          </button>
-
-          {isLocating && (
+        {/* Dedicated Map Action Controls Toolbar - Sits Immediately Below the Map */}
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+          {/* Left Action Group: Reset View, Location GPS, Follow Mode, Sea Temperature */}
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
-              onClick={() => setFollowState(!isFollowingUserRef.current)}
-              className={`px-2 py-1.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
-                isFollowingUser
-                  ? 'bg-emerald-600 text-white border-emerald-400'
-                  : 'bg-slate-900/90 text-slate-300 border-slate-700'
-              }`}
-              title="Kullanıcı hareket ettikçe haritayı otomatik takip et"
+              onClick={handleResetView}
+              className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1.5 shadow-md transition active:scale-95"
+              title="Samsun - Ordu Genel Görünüme Sıfırla"
             >
-              <span>{isFollowingUser ? '✓ Takip Açık' : 'Takip'}</span>
+              <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Samsun–Ordu</span>
             </button>
-          )}
 
-          <button
-            onClick={() => setIsSstActive(!isSstActive)}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md backdrop-blur-md border transition ${
-              isSstActive
-                ? 'bg-rose-600 text-white border-rose-400 shadow-rose-500/25 ring-2 ring-rose-500/20'
-                : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-rose-400'
-            }`}
-            title="NASA GIBS Gerçek Deniz Yüzeyi Sıcaklığı (SST) Uydu Termal Katmanı"
-          >
-            <Thermometer className={`w-3 h-3 ${isSstActive ? 'text-white' : 'text-rose-400'}`} />
-            <span>{isSstActive ? 'Deniz Sıcaklığı (NASA)' : 'Deniz Sıcaklığı'}</span>
-            {sstLoading && <RefreshCw className="w-2.5 h-2.5 animate-spin text-white" />}
-          </button>
+            {!isLocating ? (
+              <button
+                onClick={handleCenterOnUser}
+                className="px-2.5 py-1.5 rounded-full bg-slate-900/95 text-slate-200 border border-slate-700 hover:border-cyan-400 text-[11px] font-semibold flex items-center gap-1.5 shadow-md transition active:scale-95"
+                title="Konumumu Haritada Göster"
+              >
+                <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Konumum</span>
+              </button>
+            ) : (
+              <div className="inline-flex items-center rounded-full bg-cyan-950/90 border border-cyan-500/60 shadow-md">
+                <button
+                  onClick={handleCenterOnUser}
+                  className="px-2.5 py-1.5 text-[11px] font-semibold text-cyan-200 hover:text-white flex items-center gap-1.5 transition"
+                  title="Mevcut GPS konumunuza odaklanın"
+                >
+                  <Navigation className="w-3 h-3 text-cyan-400 fill-cyan-400 animate-pulse" />
+                  <span>Konum: Aktif</span>
+                </button>
+                <button
+                  onClick={toggleLocationTracking}
+                  className="pr-2.5 pl-1 py-1.5 text-cyan-400 hover:text-red-400 transition"
+                  title="Konum takibini kapat"
+                  aria-label="Konum takibini kapat"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            {isLocating && (
+              <button
+                onClick={handleToggleFollow}
+                className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md border transition active:scale-95 ${
+                  isFollowingUser
+                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-emerald-500/20'
+                    : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-slate-500'
+                }`}
+                title={isFollowingUser ? 'Otomatik konum takibi açık (Kapatmak için tıklayın)' : 'Otomatik konum takibini aç'}
+              >
+                <Check className={`w-3 h-3 ${isFollowingUser ? 'text-white' : 'text-slate-500'}`} />
+                <span>{isFollowingUser ? 'Takip: Açık' : 'Takip: Kapalı'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsSstActive(prev => !prev)}
+              className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md border transition active:scale-95 ${
+                isSstActive
+                  ? 'bg-rose-600 text-white border-rose-400 shadow-rose-500/25 ring-2 ring-rose-500/20'
+                  : 'bg-slate-900/95 text-slate-200 border-slate-700 hover:border-rose-400'
+              }`}
+              title="NASA GIBS Gerçek Deniz Yüzeyi Sıcaklığı (SST) Uydu Termal Katmanı"
+            >
+              <Thermometer className={`w-3.5 h-3.5 ${isSstActive ? 'text-white' : 'text-rose-400'}`} />
+              <span>{isSstActive ? 'Deniz Sıcaklığı (NASA)' : 'Deniz Sıcaklığı'}</span>
+              {sstLoading && <RefreshCw className="w-2.5 h-2.5 animate-spin text-white" />}
+            </button>
+          </div>
+
+          {/* Right Action Group: Filters Drawer Toggle & Fullscreen Toggle */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowFilterDrawer(prev => !prev)}
+              className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-md border transition active:scale-95 ${
+                showFilterDrawer || cityFilter !== 'Tümü' || typeFilter !== 'Tümü' || verificationFilter !== 'Tümü'
+                  ? 'bg-cyan-700 text-white border-cyan-400'
+                  : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
+              }`}
+              title="Mera Filtreleri Aç / Kapat"
+            >
+              <Filter className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Filtre</span>
+              {(cityFilter !== 'Tümü' || typeFilter !== 'Tümü' || verificationFilter !== 'Tümü') && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300"></span>
+              )}
+            </button>
+
+            <button
+              onClick={toggleFullscreen}
+              className="w-8 h-8 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 flex items-center justify-center shadow-md hover:text-white transition active:scale-95"
+              title={isFullscreen ? 'Tam Ekrandan Çık' : 'Haritayı Büyüt'}
+              aria-label={isFullscreen ? 'Tam Ekrandan Çık' : 'Tam Ekran'}
+            >
+              {isFullscreen ? <X className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-          <button
-            onClick={() => setShowFilterDrawer(!showFilterDrawer)}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shadow-md backdrop-blur-md border transition ${
-              cityFilter !== 'Tümü' || typeFilter !== 'Tümü' || verificationFilter !== 'Tümü'
-                ? 'bg-cyan-700 text-white border-cyan-400'
-                : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
-            }`}
-            title="Mera Filtreleri"
-          >
-            <Filter className="w-3 h-3 text-cyan-400" />
-            <span className="hidden sm:inline">Filtre</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setIsFullscreen(!isFullscreen);
-              setTimeout(() => {
-                if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
-              }, 150);
-            }}
-            className="w-8 h-8 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 flex items-center justify-center shadow-md backdrop-blur-md hover:text-white transition"
-            title={isFullscreen ? 'Tam Ekrandan Çık' : 'Haritayı Büyüt'}
-          >
-            {isFullscreen ? <X className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
+        {/* Mera Filter Panel (Rendered Below Toolbar with Explicit Close Button) */}
         {showFilterDrawer && (
-          <div className="absolute top-14 left-3 right-3 z-30 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
+          <div className="mt-2.5 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <Filter className="w-3.5 h-3.5 text-cyan-400" />
                 Mera Filtreleri ({filteredSpots.length} nokta listeleniyor)
               </span>
-              <button 
-                onClick={() => {
-                  setCityFilter('Tümü');
-                  setTypeFilter('Tümü');
-                  setVerificationFilter('Tümü');
-                }}
-                className="text-[10px] text-cyan-400 hover:underline"
-              >
-                Sıfırla
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button 
+                  onClick={() => {
+                    setCityFilter('Tümü');
+                    setTypeFilter('Tümü');
+                    setVerificationFilter('Tümü');
+                  }}
+                  className="text-[11px] text-cyan-400 hover:underline"
+                >
+                  Sıfırla
+                </button>
+                <button
+                  onClick={() => setShowFilterDrawer(false)}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  title="Filtre panelini kapat"
+                  aria-label="Filtre panelini kapat"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -837,17 +949,26 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
+        {/* NASA SST Info & Opacity Panel (Rendered Below Toolbar with Explicit Close Button) */}
         {isSstActive && (
-          <div className="absolute top-12 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-30 p-2.5 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1">
+          <div className="mt-2.5 p-3 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
                 <Thermometer className="w-3.5 h-3.5 text-rose-400" />
                 <span>NASA GIBS Deniz Sıcaklığı (SST)</span>
+                <span className="text-[9px] font-mono text-slate-400 ml-1">GHRSST MUR L4 · default/default</span>
               </div>
-              <span className="text-[9px] font-mono text-slate-400">GHRSST MUR L4 · 1 km</span>
+              <button
+                onClick={() => setIsSstActive(false)}
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                title="Deniz sıcaklığı katmanını kapat"
+                aria-label="Deniz sıcaklığı katmanını kapat"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            <div className="flex items-center justify-between text-[10px] text-slate-300 mt-2">
+            <div className="flex items-center justify-between text-[10px] text-slate-300">
               <span className="text-slate-400">Termal Saydamlık:</span>
               <div className="flex items-center gap-1">
                 {([0.45, 0.65, 0.85] as const).map((op) => (
@@ -864,7 +985,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </div>
             </div>
 
-            <div className="space-y-0.5 mt-2">
+            <div className="space-y-0.5">
               <div className="flex justify-between text-[9px] text-slate-400 font-mono">
                 <span>Daha Soğuk (Mavi/Yeşil)</span>
                 <span>Daha Sıcak (Sarı/Kırmızı)</span>
@@ -872,12 +993,23 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
             </div>
 
-            <div className="text-[9px] text-slate-400 leading-tight mt-2">
-              <strong>Bilimsel Veri:</strong> NASA GIBS kaynaklı günlük deniz yüzeyi sıcaklığı kompozitidir; 1 km çözünürlüktedir. Balık biyokütlesi veya anlık av garantisi değildir.
+            <div className="text-[9px] text-slate-300 leading-normal">
+              Bu katman NASA GIBS kaynaklı deniz yüzeyi sıcaklığı görselleştirmesidir. Veri tarihi bu ekranda bağımsız olarak doğrulanmıyor. Renkler kesin sıcaklık ölçümü olarak yorumlanmamalıdır. Bu katman balık yoğunluğunu, kıyı derinliğini veya av başarısını göstermez.
             </div>
 
+            <div className="text-[8.5px] text-slate-500 font-mono leading-tight">
+              * URL katmanı default/default parametresiyle çağrılmaktadır; anlık veya güncel veri garantisi verilmez.
+            </div>
+
+            {sstLoading && (
+              <div className="text-[9px] text-cyan-400 flex items-center gap-1">
+                <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                <span>Uydu döşemeleri yükleniyor...</span>
+              </div>
+            )}
+
             {sstError && (
-              <div className="text-[9px] text-amber-300 flex items-center gap-1 mt-2">
+              <div className="text-[9px] text-amber-300 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
                 <span>{sstError}</span>
               </div>
@@ -885,23 +1017,25 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-2 text-[10px] text-slate-300 bg-slate-950/90 px-2.5 py-1 rounded-full border border-slate-800 backdrop-blur-md">
-          <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400 font-medium">Mendirek</strong></span>
-          <span>•</span>
-          <span className="flex items-center gap-1">🪨 <strong className="text-amber-400 font-medium">Kayalık</strong></span>
-          <span>•</span>
-          <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
-          <span>•</span>
-          <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
-        </div>
+        {/* Map Type Legend & Security Notice - Placed Cleanly Outside the Map */}
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-slate-400">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400 font-medium">Mendirek</strong></span>
+            <span>•</span>
+            <span className="flex items-center gap-1">🪨 <strong className="text-amber-400 font-medium">Kayalık</strong></span>
+            <span>•</span>
+            <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
+            <span>•</span>
+            <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
+          </div>
 
-        <div className="absolute bottom-2.5 right-3 z-20">
-          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/95 text-amber-300 font-medium text-[10px] shadow-md border border-amber-500/40 backdrop-blur-md">
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-amber-300 font-medium text-[9.5px] shadow-sm border border-amber-500/40">
             <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
             <span className="hidden sm:inline">Güvenlik: Canlı veri yok (Sahada kontrol ediniz)</span>
             <span className="sm:hidden">Güvenlik: Teyitsiz</span>
           </div>
         </div>
+
       </div>
 
       <div className="mt-3.5 p-4 rounded-2xl bg-[#0e1626] border border-cyan-500/30 shadow-xl space-y-3">
