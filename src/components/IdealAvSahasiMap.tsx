@@ -4,6 +4,7 @@ import {
   Crosshair, 
   ChevronDown, 
   Maximize2, 
+  Minimize2,
   MapPin, 
   X, 
   AlertCircle, 
@@ -109,13 +110,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   // Mera filtering states
   const [cityFilter, setCityFilter] = useState<'Tümü' | 'Samsun' | 'Ordu'>('Tümü');
   const [typeFilter, setTypeFilter] = useState<'Tümü' | 'Mendirek/Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı'>('Tümü');
-  const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'FIZIKI_YAPI_TEYITLI' | 'COGRAFI_REFERANS_NOKTASI'>('Tümü');
+  const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'FIZIKI_YAPI_TEYITLI' | 'COGRAFI_REFERANS_NOKTASI' | 'GENIS_HAT_TEYITSIZ'>('Tümü');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   // Currently selected point (defaults to Ünye Liman Mendireği)
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
-    lat: 41.1355,
-    lng: 37.2915
+    lat: 41.1417,
+    lng: 37.3117
   });
 
   const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(
@@ -527,6 +528,18 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           }
         },
         (error) => {
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          if (userMarkerRef.current) {
+            userMarkerRef.current.remove();
+            userMarkerRef.current = null;
+          }
+          if (userAccuracyCircleRef.current) {
+            userAccuracyCircleRef.current.remove();
+            userAccuracyCircleRef.current = null;
+          }
           let msg = 'Konum alınamadı.';
           if (error.code === error.PERMISSION_DENIED) {
             msg = 'Konum izni reddedildi. Tarayıcı ayarlarından konuma izin veriniz.';
@@ -547,6 +560,10 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       );
       watchIdRef.current = watchId;
     } catch (e: any) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       setGeoErrorMsg('Konum servisi başlatılamadı (HTTPS bağlantısı gereklidir).');
       setLocatingState(false);
       setFollowState(false);
@@ -574,33 +591,71 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
   }, [setFollowState, userCoords]);
 
-  // Fullscreen toggle with map resize invalidation
+  // Fullscreen toggle handler
   const toggleFullscreen = useCallback(() => {
-    setIsFullscreen((prev) => {
-      const next = !prev;
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 150);
-      return next;
-    });
+    setIsFullscreen((prev) => !prev);
   }, []);
 
-  // Mobile resize & visibility watcher
+  // ResizeObserver on map container: reliably fires Leaflet invalidateSize as soon as layout/CSS changes
   useEffect(() => {
-    const handleResize = () => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    let rafId: number | null = null;
+    const resizeObserver = new ResizeObserver(() => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize({ debounceMoveend: true });
+        }
+      });
+    });
+
+    resizeObserver.observe(container);
+
+    const handleWindowResize = () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize();
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    const timer = setTimeout(handleResize, 200);
+    window.addEventListener('resize', handleWindowResize, { passive: true });
+    window.addEventListener('orientationchange', handleWindowResize, { passive: true });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timer);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('orientationchange', handleWindowResize);
+    };
+  }, []);
+
+  // Fullscreen effect: lock background body scrolling on iOS/desktop and listen for Escape key
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Invalidate map size on entering fullscreen
+    const rafId = requestAnimationFrame(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isFullscreen]);
 
@@ -622,10 +677,26 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     <div id="av-sahasi" className="w-full max-w-4xl mx-auto px-4 sm:px-6 pt-2 pb-4">
       
       {/* Fullscreen Wrapper Mode or Standard Flow */}
-      <div className={isFullscreen ? "fixed inset-0 z-50 bg-[#091524] p-3 sm:p-5 flex flex-col overflow-y-auto" : "w-full"}>
+      <div 
+        className={
+          isFullscreen 
+            ? "fixed inset-0 z-[60] bg-[#070c16] flex flex-col overflow-hidden w-full h-[100dvh]" 
+            : "w-full"
+        }
+        style={
+          isFullscreen 
+            ? {
+                paddingTop: 'max(10px, env(safe-area-inset-top, 10px))',
+                paddingBottom: 'max(10px, env(safe-area-inset-bottom, 10px))',
+                paddingLeft: 'max(12px, env(safe-area-inset-left, 12px))',
+                paddingRight: 'max(12px, env(safe-area-inset-right, 12px))',
+              }
+            : undefined
+        }
+      >
         
         {/* Header: Samsun – Ordu Kıyı Haritası · [Hedef Balık ▾] */}
-        <div className="flex items-center justify-between mb-2.5 shrink-0">
+        <div className="flex items-center justify-between mb-2 shrink-0 px-0.5">
           <div className="flex items-center gap-1.5 flex-wrap">
             <Crosshair className="w-4 h-4 text-cyan-400 shrink-0" />
             <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
@@ -683,24 +754,24 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             {isFullscreen && (
               <button
                 onClick={toggleFullscreen}
-                className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1 border border-slate-600 transition"
+                className="px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 border border-slate-600 shadow-md transition min-h-[36px] cursor-pointer"
                 title="Tam Ekrandan Çık"
+                aria-label="Tam Ekrandan Çık"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4 text-cyan-400" />
                 <span>Kapat</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Real Interactive Leaflet Map Container - Clean Unobstructed Canvas */}
-        <div className={`relative w-full rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
-          isFullscreen ? 'h-[56vh] sm:h-[64vh] shrink-0' : 'h-[340px] sm:h-[410px]'
+        {/* Real Interactive Leaflet Map Container - Expands to 100% remaining vertical space in fullscreen */}
+        <div className={`relative w-full overflow-hidden border border-slate-700/80 shadow-2xl bg-[#091524] ${
+          isFullscreen ? 'flex-1 min-h-0 rounded-2xl' : 'h-[340px] sm:h-[410px] rounded-3xl'
         }`}>
           <div 
             ref={mapContainerRef} 
             className="w-full h-full z-10"
-            style={{ touchAction: 'pan-x pan-y' }}
           />
 
           {mapError && (
@@ -716,11 +787,181 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </button>
             </div>
           )}
+
+          {/* Fullscreen Overlay: Mera Filter Panel */}
+          {isFullscreen && showFilterDrawer && (
+            <div className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-cyan-400" />
+                  Mera Filtreleri ({filteredSpots.length} nokta listeleniyor)
+                </span>
+                <div className="flex items-center gap-2.5">
+                  <button 
+                    onClick={() => {
+                      setCityFilter('Tümü');
+                      setTypeFilter('Tümü');
+                      setVerificationFilter('Tümü');
+                    }}
+                    className="text-[11px] text-cyan-400 hover:underline"
+                  >
+                    Sıfırla
+                  </button>
+                  <button
+                    onClick={() => setShowFilterDrawer(false)}
+                    className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                    title="Filtre panelini kapat"
+                    aria-label="Filtre panelini kapat"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-400 w-16">İl:</span>
+                {(['Tümü', 'Samsun', 'Ordu'] as const).map(city => (
+                  <button
+                    key={city}
+                    onClick={() => setCityFilter(city)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                      cityFilter === city
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {city} {city === 'Samsun' ? '(13)' : city === 'Ordu' ? '(17)' : '(30)'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-400 w-16">Kıyı Tipi:</span>
+                {(['Tümü', 'Mendirek/Liman', 'Kayalık', 'Kumsal', 'Dere Ağzı'] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(t)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                      typeFilter === t
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-400 w-16">Doğrulama:</span>
+                <button
+                  onClick={() => setVerificationFilter('Tümü')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    verificationFilter === 'Tümü' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  Tümü
+                </button>
+                <button
+                  onClick={() => setVerificationFilter('FIZIKI_YAPI_TEYITLI')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    verificationFilter === 'FIZIKI_YAPI_TEYITLI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  ⚓ Fiziki Yapı Teyitli
+                </button>
+                <button
+                  onClick={() => setVerificationFilter('COGRAFI_REFERANS_NOKTASI')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    verificationFilter === 'COGRAFI_REFERANS_NOKTASI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  📍 Coğrafi Referans
+                </button>
+                <button
+                  onClick={() => setVerificationFilter('GENIS_HAT_TEYITSIZ')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    verificationFilter === 'GENIS_HAT_TEYITSIZ' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  ⚠️ Avlak Teyitsiz (1)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Fullscreen Overlay: NASA SST Info Panel */}
+          {isFullscreen && isSstActive && (
+            <div className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
+                  <Thermometer className="w-3.5 h-3.5 text-rose-400" />
+                  <span>NASA GIBS Deniz Sıcaklığı (SST)</span>
+                  <span className="text-[9px] font-mono text-slate-400 ml-1">GHRSST MUR L4 · default/default</span>
+                </div>
+                <button
+                  onClick={() => setIsSstActive(false)}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  title="Deniz sıcaklığı katmanını kapat"
+                  aria-label="Deniz sıcaklığı katmanını kapat"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-300">
+                <span className="text-slate-400">Termal Saydamlık:</span>
+                <div className="flex items-center gap-1">
+                  {([0.45, 0.65, 0.85] as const).map((op) => (
+                    <button
+                      key={op}
+                      onClick={() => setSstOpacity(op)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
+                        sstOpacity === op ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      %{Math.round(op * 100)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <div className="flex justify-between text-[9px] text-slate-400 font-mono">
+                  <span>Daha Soğuk (Mavi/Yeşil)</span>
+                  <span>Daha Sıcak (Sarı/Kırmızı)</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
+              </div>
+
+              <div className="text-[9px] text-slate-300 leading-normal">
+                Bu katman NASA GIBS kaynaklı deniz yüzeyi sıcaklığı görselleştirmesidir. Veri tarihi bu ekranda bağımsız olarak doğrulanmıyor. Renkler kesin sıcaklık ölçümü olarak yorumlanmamalıdır. Bu katman balık yoğunluğunu, kıyı derinliğini veya av başarısını göstermez.
+              </div>
+
+              <div className="text-[8.5px] text-slate-500 font-mono leading-tight">
+                * URL katmanı default/default parametresiyle çağrılmaktadır; anlık veya güncel veri garantisi verilmez.
+              </div>
+
+              {sstLoading && (
+                <div className="text-[9px] text-cyan-400 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                  <span>Uydu döşemeleri yükleniyor...</span>
+                </div>
+              )}
+
+              {sstError && (
+                <div className="text-[9px] text-amber-300 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span>{sstError}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Warning and Notification Banners (Displayed Outside the Map) */}
         {isUserOutsideRegion && (
-          <div className="mt-2.5 p-2.5 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-md backdrop-blur-md flex items-center justify-between gap-2">
+          <div className="mt-2 p-2 rounded-xl bg-slate-900/95 border border-amber-500/60 text-[11px] text-amber-300 shadow-md backdrop-blur-md flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
@@ -738,7 +979,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         )}
 
         {geoErrorMsg && (
-          <div className="mt-2.5 p-2.5 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-md backdrop-blur-md flex items-center justify-between gap-2">
+          <div className="mt-2 p-2 rounded-xl bg-red-950/95 border border-red-500/60 text-[11px] text-red-200 shadow-md backdrop-blur-md flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span>{geoErrorMsg}</span>
@@ -754,7 +995,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
         )}
 
         {/* Dedicated Map Action Controls Toolbar - Sits Immediately Below the Map */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 shrink-0 px-0.5">
           {/* Left Action Group: Reset View, Location GPS, Follow Mode, Sea Temperature */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
@@ -850,13 +1091,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               title={isFullscreen ? 'Tam Ekrandan Çık' : 'Haritayı Büyüt'}
               aria-label={isFullscreen ? 'Tam Ekrandan Çık' : 'Tam Ekran'}
             >
-              {isFullscreen ? <X className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-cyan-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>
 
-        {/* Mera Filter Panel (Rendered Below Toolbar with Explicit Close Button) */}
-        {showFilterDrawer && (
+        {/* Standard Flow (Non-Fullscreen): Mera Filter Panel */}
+        {!isFullscreen && showFilterDrawer && (
           <div className="mt-2.5 p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <span className="font-bold text-white flex items-center gap-1.5">
@@ -945,12 +1186,20 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               >
                 📍 Coğrafi Referans
               </button>
+              <button
+                onClick={() => setVerificationFilter('GENIS_HAT_TEYITSIZ')}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  verificationFilter === 'GENIS_HAT_TEYITSIZ' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                ⚠️ Avlak Teyitsiz (1)
+              </button>
             </div>
           </div>
         )}
 
-        {/* NASA SST Info & Opacity Panel (Rendered Below Toolbar with Explicit Close Button) */}
-        {isSstActive && (
+        {/* Standard Flow (Non-Fullscreen): NASA SST Info & Opacity Panel */}
+        {!isFullscreen && isSstActive && (
           <div className="mt-2.5 p-3 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
@@ -1017,24 +1266,26 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         )}
 
-        {/* Map Type Legend & Security Notice - Placed Cleanly Outside the Map */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-slate-400">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400 font-medium">Mendirek</strong></span>
-            <span>•</span>
-            <span className="flex items-center gap-1">🪨 <strong className="text-amber-400 font-medium">Kayalık</strong></span>
-            <span>•</span>
-            <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
-            <span>•</span>
-            <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
-          </div>
+        {/* Standard Flow (Non-Fullscreen): Map Type Legend & Security Notice */}
+        {!isFullscreen && (
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-slate-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1">⚓ <strong className="text-cyan-400 font-medium">Mendirek</strong></span>
+              <span>•</span>
+              <span className="flex items-center gap-1">🪨 <strong className="text-amber-400 font-medium">Kayalık</strong></span>
+              <span>•</span>
+              <span className="flex items-center gap-1">🏖️ <strong className="text-emerald-400 font-medium">Kumsal</strong></span>
+              <span>•</span>
+              <span className="flex items-center gap-1">🌊 <strong className="text-blue-400 font-medium">Dere</strong></span>
+            </div>
 
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-amber-300 font-medium text-[9.5px] shadow-sm border border-amber-500/40">
-            <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
-            <span className="hidden sm:inline">Güvenlik: Canlı veri yok (Sahada kontrol ediniz)</span>
-            <span className="sm:hidden">Güvenlik: Teyitsiz</span>
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-amber-300 font-medium text-[9.5px] shadow-sm border border-amber-500/40">
+              <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Güvenlik: Canlı veri yok (Sahada kontrol ediniz)</span>
+              <span className="sm:hidden">Güvenlik: Teyitsiz</span>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -1115,7 +1366,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
             <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
             <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Kıyı Eşiği:</strong> Sınıflandırma elle tanımlanmış yaklaşık referans çizgisine 450 m yakınlık eşiğiyle yapılmaktadır; resmî kadastro kıyı kenar çizgisine göre sınırlı örnek düzeyde bir yakınlık değerlendirmesidir.
+              <strong>Geometrik Kıyı Eşiği:</strong> Sınıflandırma, GeoJSON kara poligonu sınırına uygulanan 450 metrelik geometrik tampon eşiğine dayanır. Bu eşik resmi kadastro kıyı kenar çizgisi, balıkçılık sahası garantisi veya yasal avlanma sınırı değildir; yalnızca haritada karasal alan ile kıyı bandını ayıran yaklaşık bir geometrik referanstır.
             </div>
             {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
               <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">

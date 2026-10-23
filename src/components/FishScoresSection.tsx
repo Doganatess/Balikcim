@@ -33,10 +33,12 @@ export const FishScoresSection: React.FC<FishScoresSectionProps> = ({
             <h3 className="text-base sm:text-xl font-bold text-white tracking-tight">
               {region.name} Balık Avı Skorları
             </h3>
-            <span className="text-[10px] text-slate-500 font-mono">Örnek Model</span>
+            <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800/60">
+              Kural Tabanlı Tahmin Modeli
+            </span>
           </div>
           <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-            Solunar döngüsü ve mevsimsel koşullara dayalı örnek model skorlarıdır (Gerçek avlanma garantisi değildir).
+            Skorlar saat dilimi, ay fazı ve mevsimsel sıcaklık toleransına dayalı teorik modeldir. Canlı sonar, biyokütle veya kesin avlanma garantisi göstermez.
           </p>
         </div>
 

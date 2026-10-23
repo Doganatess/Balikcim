@@ -1,175 +1,102 @@
+import { 
+  VERIFIED_COASTAL_SPOTS, 
+  VerifiedCoastalSpot, 
+  SpotVerificationStatus,
+  CoastalLocationType 
+} from './samsunOrduMapData';
+
 export interface MeraSpot {
   id: string;
   name: string;
-  province: string;
+  province: 'Samsun' | 'Ordu';
   district: string;
   distanceKm: number;
-  activityScore: number; // 0 - 100 model skoru
+  activityScore: number; // 0 - 100 teorik model skoru
   isTrending: boolean;
-  type: 'Kıyı' | 'Tekne' | 'Liman' | 'Kayalık' | 'Kumsal' | 'İç Su';
+  type: 'Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı' | 'Kıyı';
   popularFish: string[];
   depthDesc: string;
   bottomType: string;
+  lat: number;
+  lng: number;
+  verificationStatus: SpotVerificationStatus;
+  verificationBadge: string;
+  verificationNote: string;
+  cautions: string;
 }
 
-export const MERALAR_LIST: MeraSpot[] = [
-  // --- ORDU MERALARI ---
-  {
-    id: 'm-unye-liman',
-    name: 'Ünye Liman Mendireği (Ana Fener)',
-    province: 'Ordu',
-    district: 'Ünye',
-    distanceKm: 2,
-    activityScore: 92,
-    isTrending: true,
-    type: 'Liman',
-    popularFish: ['Çinekop', 'Lüfer', 'İstavrit', 'Palamut'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Yapay Taş Dolgu & Mendirek'
-  },
-  {
-    id: 'm-unye-camlik',
-    name: 'Ünye Çamlık Sahili & Falezleri',
-    province: 'Ordu',
-    district: 'Ünye',
-    distanceKm: 3,
-    activityScore: 89,
-    isTrending: true,
-    type: 'Kayalık',
-    popularFish: ['Levrek', 'Eşkina', 'Karagöz', 'İstavrit'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Doğal Volkanik Kayalık & Kırık Taş'
-  },
-  {
-    id: 'm-fatsa-barinak',
-    name: 'Fatsa Balıkçı Barınağı Mendireği',
-    province: 'Ordu',
-    district: 'Fatsa',
-    distanceKm: 18,
-    activityScore: 88,
-    isTrending: true,
-    type: 'Liman',
-    popularFish: ['İstavrit', 'Minekop', 'Palamut', 'Kefal'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Kırma Taş & Korunaklı İç Liman'
-  },
-  {
-    id: 'm-persembe-yason',
-    name: 'Perşembe Yason Burnu & Feneri',
-    province: 'Ordu',
-    district: 'Perşembe',
-    distanceKm: 32,
-    activityScore: 94,
-    isTrending: true,
-    type: 'Kayalık',
-    popularFish: ['Lüfer', 'Palamut', 'Levrek', 'İstavrit'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Karadeniz\'e Uzanan Doğal Kaya Dili'
-  },
-  {
-    id: 'm-persembe-vona',
-    name: 'Perşembe Vona Limanı & Rıhtım',
-    province: 'Ordu',
-    district: 'Perşembe',
-    distanceKm: 36,
-    activityScore: 86,
-    isTrending: true,
-    type: 'Liman',
-    popularFish: ['Eşkina', 'İstavrit', 'Karagöz', 'Mezgit'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Doğal Derin Koy & Balıkçı Rıhtımı'
-  },
-  {
-    id: 'm-ordu-tasbasi',
-    name: 'Ordu Rıhtım & Taşbaşı Kıyısı',
-    province: 'Ordu',
-    district: 'Altınordu',
-    distanceKm: 50,
-    activityScore: 91,
-    isTrending: true,
-    type: 'Kayalık',
-    popularFish: ['İstavrit', 'Çinekop', 'Lüfer', 'Minekop'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Sahil Dolgusu & Taş Tahkimat'
-  },
-  {
-    id: 'm-ordu-melet',
-    name: 'Ordu Melet Irmağı Ağzı',
-    province: 'Ordu',
-    district: 'Altınordu',
-    distanceKm: 54,
-    activityScore: 85,
-    isTrending: true,
-    type: 'Kumsal',
-    popularFish: ['Levrek', 'Minekop', 'Kalkan', 'Kefal'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Alüvyon Çakıl & Kumul Hat'
-  },
+/**
+ * Haversine formülü ile iki koordinat arası kuş uçuşu mesafe (km)
+ */
+export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
 
-  // --- SAMSUN MERALARI ---
-  {
-    id: 'm-samsun-batipark',
-    name: 'Samsun Batı Park Mendireği',
-    province: 'Samsun',
-    district: 'İlkadım',
-    distanceKm: 75,
-    activityScore: 93,
-    isTrending: true,
-    type: 'Liman',
-    popularFish: ['İstavrit', 'Çinekop', 'Lüfer', 'Mezgit'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Taş Tahkimat Blokları'
-  },
-  {
-    id: 'm-samsun-kurupelit',
-    name: 'Kurupelit Yat Limanı Mendireği',
-    province: 'Samsun',
-    district: 'Atakum',
-    distanceKm: 85,
-    activityScore: 88,
-    isTrending: true,
-    type: 'Liman',
-    popularFish: ['İstavrit', 'Mezgit', 'Çinekop', 'Levrek'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Yapay Marin Mendirek'
-  },
-  {
-    id: 'm-samsun-mert',
-    name: 'Samsun Mert Irmağı Ağzı',
-    province: 'Samsun',
-    district: 'Canik',
-    distanceKm: 72,
-    activityScore: 87,
-    isTrending: true,
-    type: 'Kumsal',
-    popularFish: ['Levrek', 'Minekop', 'Kefal', 'Kalkan'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Alüvyon Kumsal & Dere Ağzı'
-  },
-  {
-    id: 'm-carsamba-delta',
-    name: 'Çarşamba Yeşilırmak Deltası Civa Burnu',
-    province: 'Samsun',
-    district: 'Çarşamba',
-    distanceKm: 55,
-    activityScore: 90,
-    isTrending: true,
-    type: 'Kumsal',
-    popularFish: ['Kalkan', 'Levrek', 'Minekop'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Geniş Delta Kumulları & Nehir Ağzı'
-  },
-  {
-    id: 'm-terme-milic',
-    name: 'Terme Miliç Sahili & Dere Ağzı',
-    province: 'Samsun',
-    district: 'Terme',
-    distanceKm: 28,
-    activityScore: 84,
-    isTrending: true,
-    type: 'Kumsal',
-    popularFish: ['Kalkan', 'Levrek', 'Mırmır'],
-    depthDesc: 'Doğrulanmış batimetri ölçümü bulunmuyor',
-    bottomType: 'Kumluk Plaj Sahili & Dere Ağzı'
-  }
-];
+// Ünye Körfezi merkez referans koordinatı (varsayılan kıyaslama için)
+const DEFAULT_CENTER_LAT = 41.132;
+const DEFAULT_CENTER_LNG = 37.283;
+
+// Kıyı türünü basitleştirilmiş arayüz kategorisine dönüştürme
+function mapLocationTypeToMeraType(locType: CoastalLocationType): 'Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı' | 'Kıyı' {
+  if (locType.includes('Mendirek') || locType.includes('Liman')) return 'Liman';
+  if (locType.includes('Kayalık')) return 'Kayalık';
+  if (locType.includes('Kumsal') || locType.includes('Plaj')) return 'Kumsal';
+  if (locType.includes('Dere') || locType.includes('Nehir')) return 'Dere Ağzı';
+  return 'Kıyı';
+}
+
+// Kıyı yapısına göre teorik aktivite skoru hesaplayıcı
+function calculateStructureActivityScore(spot: VerifiedCoastalSpot): number {
+  if (spot.verificationStatus === 'GENIS_HAT_TEYITSIZ') return 78;
+  if (spot.locationType.includes('Mendirek')) return 92;
+  if (spot.locationType.includes('Kayalık')) return 89;
+  if (spot.locationType.includes('Dere')) return 86;
+  if (spot.locationType.includes('Kumsal')) return 83;
+  return 85;
+}
+
+/**
+ * VERIFIED_COASTAL_SPOTS (30 kıyı noktası) üzerinden üretilen tekil ve birleşik mera listesi
+ */
+export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
+  const distanceKm = calculateDistanceKm(DEFAULT_CENTER_LAT, DEFAULT_CENTER_LNG, spot.lat, spot.lng);
+  const isTrending = spot.verificationStatus === 'FIZIKI_YAPI_TEYITLI' || spot.id.includes('yason') || spot.id.includes('camlik');
+
+  return {
+    id: spot.id,
+    name: spot.name,
+    province: spot.city,
+    district: spot.district,
+    distanceKm,
+    activityScore: calculateStructureActivityScore(spot),
+    isTrending,
+    type: mapLocationTypeToMeraType(spot.locationType),
+    popularFish: spot.commonTargetSpecies,
+    depthDesc: spot.depthStatus, // 'Doğrulanmış batimetri ölçümü bulunmuyor'
+    bottomType: spot.verifiedGeoFeature,
+    lat: spot.lat,
+    lng: spot.lng,
+    verificationStatus: spot.verificationStatus,
+    verificationBadge: spot.verificationBadge,
+    verificationNote: spot.verificationNote,
+    cautions: spot.cautions
+  };
+});
+
+// İstatistik sayaçları (Arayüzde şeffaf gösterim için)
+export const MERA_STATS = {
+  total: MERALAR_LIST.length, // 30
+  samsunCount: MERALAR_LIST.filter(m => m.province === 'Samsun').length, // 13
+  orduCount: MERALAR_LIST.filter(m => m.province === 'Ordu').length, // 17
+  fizikiYapiTeyitliCount: MERALAR_LIST.filter(m => m.verificationStatus === 'FIZIKI_YAPI_TEYITLI').length, // 15
+  cografiReferansCount: MERALAR_LIST.filter(m => m.verificationStatus === 'COGRAFI_REFERANS_NOKTASI').length, // 14
+  teyitsizHatCount: MERALAR_LIST.filter(m => m.verificationStatus === 'GENIS_HAT_TEYITSIZ').length // 1
+};

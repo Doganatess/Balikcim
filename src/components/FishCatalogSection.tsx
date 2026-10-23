@@ -32,11 +32,11 @@ export const FishCatalogSection: React.FC<FishCatalogSectionProps> = ({
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-cyan-400" />
           <h2 className="text-base sm:text-xl font-bold text-white tracking-tight">
-            101 Tür Balık Rehberi & Kataloğu
+            {FISH_CATALOG.length} Tür Hedef Balık Kataloğu & Rehberi
           </h2>
         </div>
         <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-          Etkili yemler, takım şemaları, derinlik ve yasal asgari av boyları
+          Katalogdaki {FISH_CATALOG.length} tür için etkili yemler, takım tavsiyeleri, mevsimler ve yasal asgari av boyları. Skorlar kural tabanlı tahmin modelidir; gerçek zamanlı biyokütle garantisi vermez.
         </p>
       </div>
 

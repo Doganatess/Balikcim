@@ -196,10 +196,10 @@ export function deleteCatchRecord(id: string): CatchRecord[] {
 export function getStoredFavorites(): string[] {
   try {
     const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
-    if (!raw) return ['m1', 'm2']; // Default favorites
+    if (!raw) return ['unye-liman-mendirek', 'samsun-baruthane']; // Default verified favorites
     return JSON.parse(raw);
   } catch (e) {
-    return ['m1', 'm2'];
+    return ['unye-liman-mendirek', 'samsun-baruthane'];
   }
 }
 
