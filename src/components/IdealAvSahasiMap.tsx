@@ -36,12 +36,16 @@ interface IdealAvSahasiMapProps {
   region: Region;
   selectedFish: FishSpecies;
   onSelectFish: (fish: FishSpecies) => void;
+  targetSpotName?: string | null;
+  onClearTargetSpot?: () => void;
 }
 
 export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   region,
   selectedFish,
-  onSelectFish
+  onSelectFish,
+  targetSpotName,
+  onClearTargetSpot
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -447,6 +451,30 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
   }, [selectedCoord]);
 
+  // 4b. Sync target spot when requested from other tabs (e.g., Meralar tab)
+  useEffect(() => {
+    if (!targetSpotName) return;
+    const found = VERIFIED_COASTAL_SPOTS.find(
+      s => s.name.toLowerCase() === targetSpotName.toLowerCase() || s.id === targetSpotName
+    );
+    if (found) {
+      setSelectedCoord({ lat: found.lat, lng: found.lng });
+      setSelectedSpot(found);
+      setActiveQuickTab('mera');
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([found.lat, found.lng], 13, { animate: true, duration: 1 });
+      }
+      onClearTargetSpot?.();
+    }
+  }, [targetSpotName, onClearTargetSpot]);
+
+  // 4c. Smoothly pan map when user selects a new region in navbar / picker
+  useEffect(() => {
+    if (mapInstanceRef.current && region) {
+      mapInstanceRef.current.flyTo([region.lat, region.lng], 11, { animate: true, duration: 1 });
+    }
+  }, [region.id, region.lat, region.lng]);
+
   // 5. Geolocation Tracker: Start / Stop Handler
   const toggleLocationTracking = useCallback(() => {
     setGeoErrorMsg(null);
@@ -742,7 +770,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                       </div>
                       <div className="text-right">
                         <div className="text-xs font-mono font-bold text-cyan-400">%{fish.currentScore}</div>
-                        <div className="text-[9px] text-slate-500">Model skoru</div>
+                        <div className="text-[9px] text-slate-500">Katalog İndeksi</div>
                       </div>
                     </button>
                   ))}
@@ -796,7 +824,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
           {/* Fullscreen Overlay: Mera Filter Panel */}
           {isFullscreen && showFilterDrawer && (
-            <div className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200">
+            <div 
+              onTouchStart={(e) => e.stopPropagation()} 
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs space-y-2 animate-in fade-in duration-200"
+            >
               <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                 <span className="font-bold text-white flex items-center gap-1.5">
                   <Filter className="w-3.5 h-3.5 text-cyan-400" />
@@ -898,7 +930,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
           {/* Fullscreen Overlay: NASA SST Info Panel */}
           {isFullscreen && isSstActive && (
-            <div className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in duration-200">
+            <div 
+              onTouchStart={(e) => e.stopPropagation()} 
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute bottom-3 left-3 right-3 z-30 max-h-[50dvh] overflow-y-auto p-3 rounded-2xl bg-[#0b1322]/95 border border-rose-500/40 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in duration-200"
+            >
               <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                 <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
                   <Thermometer className="w-3.5 h-3.5 text-rose-400" />
@@ -954,6 +990,48 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   <span>{sstError}</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Fullscreen Overlay: Compact Floating Selected Spot / Coordinate Pill */}
+          {isFullscreen && !showFilterDrawer && !isSstActive && (
+            <div 
+              onTouchStart={(e) => e.stopPropagation()} 
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute bottom-3 left-3 right-3 z-30 p-2.5 rounded-2xl bg-[#091524]/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md text-xs flex items-center justify-between gap-2 animate-in fade-in duration-150"
+            >
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="text-base shrink-0">📍</span>
+                <div className="min-w-0">
+                  <div className="font-bold text-white text-xs truncate">
+                    {selectedSpot ? selectedSpot.name : `${selectedCoord.lat.toFixed(4)}°N, ${selectedCoord.lng.toFixed(4)}°E`}
+                  </div>
+                  <div className="text-[10px] text-slate-300 flex items-center gap-1.5 flex-wrap">
+                    <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-semibold ${
+                      geoAnalysis.zoneType === 'kiyi' ? 'text-emerald-300 bg-emerald-950/80 border border-emerald-800' :
+                      geoAnalysis.zoneType === 'deniz' ? 'text-blue-300 bg-blue-950/80 border border-blue-800' :
+                      geoAnalysis.zoneType === 'kara' ? 'text-red-300 bg-red-950/80 border border-red-800' :
+                      'text-slate-300 bg-slate-800 border border-slate-700'
+                    }`}>
+                      {geoAnalysis.zone}
+                    </span>
+                    {geoAnalysis.distanceToCoastKm !== null && (
+                      <span className="text-slate-400 font-mono text-[9px]">
+                        ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`} kıyıya
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={toggleFullscreen}
+                  className="px-2.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white font-bold text-[11px] transition shadow cursor-pointer"
+                  title="Tam ekrandan çıkıp detaylı analizi gör"
+                >
+                  Detay
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1411,7 +1489,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {/* Hedef Tür ve Model Skoru Bilgisi */}
+        {/* Hedef Tür ve Katalog Aktivite İndeksi Bilgisi */}
         <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="text-xl shrink-0">{selectedFish.emoji}</span>
@@ -1425,7 +1503,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   : geoAnalysis.zoneType === 'kara'
                   ? 'Karasal alan seçildi; deniz kıyısı veya olta atış imkânı bulunmamaktadır.'
                   : geoAnalysis.zoneType === 'kiyi'
-                  ? `Seçilen kıyı bandında ${selectedFish.name} için genel mevsimsel pencereler (${selectedFish.bestHours}) ve önerilen yemler (${selectedFish.bestBaits[0]}) denenebilir; ancak balık bulunma garantisi yoktur.`
+                  ? `Seçilen kıyı bandında ${selectedFish.name} için önerilen av saatleri (${selectedFish.bestHours}) ve yem tercihleri (${selectedFish.bestBaits[0]}) genel bölgesel/biyolojik tavsiyelerdir; konuma özgü doğrulanmış tahmin veya balık yakalama garantisi değildir.`
                   : 'Yeterli coğrafi veri bulunmadığından bu koordinatta türe özel kıyı tavsiyesi üretilememiştir.'}
               </div>
             </div>
@@ -1433,7 +1511,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
           <div className="text-right shrink-0">
             <div className="text-xs font-mono font-bold text-cyan-400">%{selectedFish.currentScore}</div>
-            <div className="text-[9px] text-slate-500 leading-tight">Örnek Model Skoru<br/>(Balık garantisi değildir)</div>
+            <div className="text-[9px] text-slate-500 leading-tight">Katalog Aktivite İndeksi<br/>(Konuma özgü olasılık değildir)</div>
           </div>
         </div>
 

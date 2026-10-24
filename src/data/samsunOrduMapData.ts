@@ -686,6 +686,31 @@ function isLandPoint(lat: number, lng: number): boolean {
   return false;
 }
 
+function isPointInAnyHole(lat: number, lng: number): boolean {
+  for (const feature of LAND_GEOJSON.features) {
+    const geometry = feature.geometry;
+    if (!geometry) continue;
+
+    if (geometry.type === 'Polygon') {
+      for (let i = 1; i < geometry.coordinates.length; i++) {
+        if (pointInRing(lat, lng, geometry.coordinates[i])) {
+          return true;
+        }
+      }
+    } else if (geometry.type === 'MultiPolygon') {
+      for (const polygon of geometry.coordinates) {
+        for (let i = 1; i < polygon.length; i++) {
+          if (pointInRing(lat, lng, polygon[i])) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 function isArtificialClipEdge(a: Position, b: Position): boolean {
   const [aLng, aLat] = a;
   const [bLng, bLat] = b;
@@ -750,11 +775,17 @@ function distanceToLandBoundaryKm(lat: number, lng: number): LandBoundaryResult 
     if (!geometry) continue;
 
     if (geometry.type === 'Polygon') {
-      geometry.coordinates.forEach(visitRing);
+      // Yalnızca dış sınır (exterior ring - coordinates[0]) deniz kıyısını temsil eder.
+      // İç halkalar (delikler / göller) kıyı uzaklığı hesabını yanıltmamalıdır.
+      if (geometry.coordinates.length > 0) {
+        visitRing(geometry.coordinates[0]);
+      }
     } else if (geometry.type === 'MultiPolygon') {
-      geometry.coordinates.forEach(polygon =>
-        polygon.forEach(visitRing)
-      );
+      geometry.coordinates.forEach(polygon => {
+        if (polygon.length > 0) {
+          visitRing(polygon[0]);
+        }
+      });
     }
   }
 
@@ -838,9 +869,9 @@ export function classifyPointGeography(
     : null;
 
   const dataNotice =
-    'Sınıflandırma, samsunOrduLand.geojson içindeki genelleştirilmiş kara poligonu sınırına dayanır. Bu veri resmî kadastro kıyı kenar çizgisi veya batimetri (derinlik) değildir; 450 metre kıyı bandı yaklaşık geometrik bir eşiktir.';
+    'Sınıflandırma, samsunOrduLand.geojson içindeki genelleştirilmiş kara poligonu sınırına dayanır. Bu veri resmî kadastro kıyı kenar çizgisi veya batimetri (derinlik) değildir; 450 metre kıyı bandı yaklaşık geometrik bir eşiktir. Erişim ve güvenlik sahada doğrulanmalıdır.';
 
-  // 1. Veri yetersizliği veya sınır hesaplama hatası kontrolü (Belirsiz)
+  // 1a. Veri yetersizliği veya sınır hesaplama hatası kontrolü (Belirsiz)
   if (!Number.isFinite(coastDistanceKm) || coastDistanceKm === Infinity) {
     return {
       zone: 'Belirsiz (Coğrafi Veriyle Doğrulanamadı)',
@@ -855,7 +886,22 @@ export function classifyPointGeography(
     };
   }
 
-  // 2. Kıyı şeridi (~450 metre geometrik eşik içi)
+  // 1b. Poligon içi delik/boşluk kontrolü (İç su alanları veya geometrik veri boşlukları)
+  if (isPointInAnyHole(lat, lng)) {
+    return {
+      zone: 'Belirsiz (Coğrafi Veriyle Doğrulanamadı)',
+      zoneType: 'belirsiz',
+      isWithinBounds: true,
+      distanceToCoastKm: roundedCoastDistanceKm,
+      description:
+        'Seçilen koordinat kara poligonunun iç halkasında (iç su, delik veya veri kesintisi) kalmaktadır. Deniz kıyısı veya açık deniz verisiyle doğrudan doğrulanamaz.',
+      nearestSpot: minSpotDistanceKm <= 3 ? nearestSpot : null,
+      distanceToNearestSpotKm: minSpotDistanceKm <= 3 ? roundedSpotDistanceKm : null,
+      dataNotice
+    };
+  }
+
+  // 2. Kıyı şeridi (~450 metre yaklaşık geometrik eşik içi)
   if (coastDistanceKm <= COASTAL_BAND_KM) {
     return {
       zone: 'Kıyı / Kıyıya Yakın',
@@ -863,7 +909,7 @@ export function classifyPointGeography(
       isWithinBounds: true,
       distanceToCoastKm: roundedCoastDistanceKm,
       description:
-        `Seçilen koordinat GeoJSON kara-deniz sınırına yaklaşık ${Math.round(coastDistanceKm * 1000)} metre mesafededir. Bu mesafe kıyıdan amatör olta atış ve erişim eşiği (~450 m geometrik kıyı bandı) içindedir.`,
+        `Seçilen koordinat GeoJSON kara-deniz sınırına yaklaşık ${Math.round(coastDistanceKm * 1000)} metre mesafededir (~450 m yaklaşık geometrik kıyı bandı eşiği içindedir; resmî kıyı çizgisi değildir). Erişim ve güvenlik sahada doğrulanmalıdır.`,
       nearestSpot,
       distanceToNearestSpotKm: roundedSpotDistanceKm,
       dataNotice
@@ -953,8 +999,11 @@ export function assessPointFishingSuitability(
       summary: 'Seçilen koordinat Samsun–Ordu kıyı analiz sınırları (36.05°D–38.20°D, 40.85°K–41.50°K) dışındadır.',
       coastalStructureInfo: 'Bölge Dışı Alan',
       generalFishingConditions: 'Samsun veya Ordu kıyı sınırları içine odaklanınız.',
-      missingDataWarnings: ['Bölgesel kıyı veri tabanı kapsamı dışındadır.'],
-      disclaimer: 'Analiz sınırları dışındaki alanlar için avlanma uygunluğu değerlendirmesi yapılmaz.'
+      missingDataWarnings: [
+        'Bölgesel kıyı veri tabanı kapsamı dışındadır.',
+        'Erişim ve güvenlik sahada doğrulanmalı.'
+      ],
+      disclaimer: 'Analiz sınırları dışındaki alanlar için avlanma uygunluğu değerlendirmesi yapılmaz. Erişim ve güvenlik sahada doğrulanmalı.'
     };
   }
 
@@ -965,15 +1014,16 @@ export function assessPointFishingSuitability(
         status: 'FIZIKI_YAPI_TEYITLI',
         badgeTitle: '⚓ Fiziki Yapı Teyitli Kıyı Noktası',
         badgeTone: 'cyan',
-        summary: `${selectedSpot.name} noktasında mendirek, barınak veya taş tahkimat gibi fiziksel bir kıyı yapısı coğrafi olarak teyitlidir. Kıyıdan olta atmaya fiziksel olarak elverişli bir platform bulunur; ancak bu durum balık yoğunluğunu veya av başarısını garanti etmez.`,
+        summary: `${selectedSpot.name} noktasında mendirek, barınak veya taş tahkimat gibi fiziksel bir kıyı yapısı coğrafi olarak teyitlidir. Ancak fiziki yapının var olması, oraya güvenli, açık ve yasal erişim olduğu anlamına gelmez. Erişim ve güvenlik sahada doğrulanmalı; balık mevcudiyeti, belirli bir derinlik veya av garantisi verilemez.`,
         coastalStructureInfo: `Fiziksel Kıyı Yapısı: ${selectedSpot.locationType} (${selectedSpot.verifiedGeoFeature})`,
-        generalFishingConditions: 'Mendirek ve burun başlarında rüzgâr yönü, dalga serpintisi, kaygan taşlar ve akıntı hızı dikkate alınmalıdır. Yerel amatör balıkçılık tebliğlerinde belirtilen liman içi kurallarına uyulmalıdır.',
+        generalFishingConditions: 'Mendirek ve burun başlarında rüzgâr yönü, dalga serpintisi, kaygan taşlar ve akıntı hızı dikkate alınmalıdır. Yerel amatör balıkçılık tebliğlerinde belirtilen liman içi kurallarına uyulmalı, erişim ve güvenlik sahada doğrulanmalıdır.',
         missingDataWarnings: [
-          'Resmi batimetri (derinlik) ölçümü bulunmamaktadır; tahmini metre değeri verilmez.',
-          'Anlık balık sürüsü veya biyokütle tespiti mevcut değildir.',
+          'Erişim ve güvenlik sahada doğrulanmalı (falez, dalga serpintisi, kaygan zemin veya yasaklı liman sahası riski).',
+          'Resmi batimetri (derinlik) ölçümü bulunmamaktadır; kesin metre değeri veya derinlik garantisi verilmez.',
+          'Anlık balık sürüsü veya biyo-yoğunluk tespiti mevcut değildir.',
           'Dip yapısı ve takılma riski sahada yerinde incelenmelidir.'
         ],
-        disclaimer: 'Fiziksel yapının varlığı balık sürüsü varlığını veya av başarısını garanti etmez.'
+        disclaimer: 'Fiziki yapının varlığı güvenli erişimi veya balık avı başarısını garanti etmez. Erişim ve güvenlik sahada doğrulanmalı.'
       };
     }
 
@@ -982,14 +1032,15 @@ export function assessPointFishingSuitability(
         status: 'COGRAFI_REFERANS',
         badgeTitle: '📍 Coğrafi Referans Noktası',
         badgeTone: 'emerald',
-        summary: `${selectedSpot.name} bölgesel doğal kumsal, burun veya sahil şeridi referansıdır. Kıyıdan erişim genel olarak mümkündür; ancak yapay mendirek gibi tahkimat bulunmayabilir.`,
+        summary: `${selectedSpot.name} bölgesel doğal kumsal, burun veya sahil şeridi referansıdır. Kıyıdan erişim genel hatlarıyla mümkün görünse de fiziki bir tahkimat veya platform bulunmayabilir. Erişim ve güvenlik sahada doğrulanmalı; balık mevcudiyeti veya av başarısı garanti edilmez.`,
         coastalStructureInfo: `Kıyı Tipi: ${selectedSpot.locationType} (${selectedSpot.verifiedGeoFeature})`,
-        generalFishingConditions: 'Kumsal şeridinde kıyı eğimi, dip akıntısı, sahil çırpıntısı ve mevsimsel dip yosunlaşması göz önünde bulundurulmalıdır.',
+        generalFishingConditions: 'Kumsal şeridinde kıyı eğimi, dip akıntısı, sahil çırpıntısı ve mevsimsel dip yosunlaşması göz önünde bulundurulmalıdır. Erişim ve güvenlik sahada doğrulanmalıdır.',
         missingDataWarnings: [
+          'Erişim ve güvenlik sahada doğrulanmalı.',
           'Resmi batimetri (derinlik) ölçümü yoktur; kıyı eğimi bilinmeden kesin atış mesafesi tavsiye edilmez.',
-          'Balık yoğunluğu garantisi bulunmamaktadır.'
+          'Balık yoğunluğu veya mevcudiyeti garantisi bulunmamaktadır.'
         ],
-        disclaimer: 'Doğrulanmış coğrafi referans verisidir; balık avı başarısı garantisi teşkil etmez.'
+        disclaimer: 'Doğrulanmış coğrafi referans verisidir; balık avı başarısı garantisi teşkil etmez. Erişim ve güvenlik sahada doğrulanmalı.'
       };
     }
 
@@ -998,14 +1049,15 @@ export function assessPointFishingSuitability(
       status: 'TEYITSIZ_HAT',
       badgeTitle: '⚠️ Yeterli Veri Yok (Teyitsiz Kıyı Hattı)',
       badgeTone: 'amber',
-      summary: `${selectedSpot.name} geniş bir kıyı hattıdır; belirli bir avlak noktası veya fiziksel kıyı tahkimatı teyit edilmemiştir.`,
+      summary: `${selectedSpot.name} geniş bir kıyı hattıdır; belirli bir avlak noktası veya güvenli olta atış yeri teyit edilmemiştir. Erişim ve güvenlik sahada doğrulanmalı.`,
       coastalStructureInfo: `Kıyı Tipi: ${selectedSpot.locationType} (Noktasal Teyit Yok)`,
-      generalFishingConditions: 'Sahaya inmeden önce yerel balıkçılardan ve sahil gözleminden güncel durum öğrenilmelidir.',
+      generalFishingConditions: 'Sahaya inmeden önce yerel balıkçılardan ve sahil gözleminden güncel durum öğrenilmeli, erişim ve güvenlik sahada doğrulanmalıdır.',
       missingDataWarnings: [
+        'Erişim ve güvenlik sahada doğrulanmalı.',
         'Noktasal avlak konumu ve kıyı platformu teyitsizdir.',
         'Derinlik, dip yapısı ve balık durumu belirsizdir.'
       ],
-      disclaimer: 'Avlak teyidi bulunmamaktadır; doğrudan av sahası olarak değerlendirilmemelidir.'
+      disclaimer: 'Avlak teyidi bulunmamaktadır; doğrudan av sahası olarak değerlendirilmemelidir. Erişim ve güvenlik sahada doğrulanmalı.'
     };
   }
 
@@ -1015,11 +1067,14 @@ export function assessPointFishingSuitability(
       status: 'UYGUN_DEGIL_KARA',
       badgeTitle: '⛔ Kıyı Balıkçılığına Uygun Değil (Karasal Alan)',
       badgeTone: 'red',
-      summary: `Seçilen koordinat kıyı çizgisinden yaklaşık ~${geo.distanceToCoastKm ?? '?'} km içeride, karasal alandadır. Kıyıdan deniz olta balıkçılığı yapılamaz.`,
+      summary: `Seçilen koordinat kıyı çizgisinden yaklaşık ~${geo.distanceToCoastKm ?? '?'} km içeride, karasal alandadır. Kıyıdan deniz olta balıkçılığı yapılamaz. Erişim ve güvenlik sahada doğrulanmalı.`,
       coastalStructureInfo: 'Karasal Alan (İç Kesim)',
       generalFishingConditions: 'Deniz balıkçılığı için kıyı şeridine veya liman bölgelerine yaklaşınız.',
-      missingDataWarnings: ['Karasal alan; deniz kıyısı veya sualtı erişimi yoktur.'],
-      disclaimer: 'Kara poligonu verisi ile doğrulanmıştır.'
+      missingDataWarnings: [
+        'Karasal alan; deniz kıyısı veya sualtı erişimi yoktur.',
+        'Erişim ve güvenlik sahada doğrulanmalı.'
+      ],
+      disclaimer: 'Kara poligonu verisi ile doğrulanmıştır. Erişim ve güvenlik sahada doğrulanmalı.'
     };
   }
 
@@ -1028,14 +1083,15 @@ export function assessPointFishingSuitability(
       status: 'UYGUN_DEGIL_ACIK_DENIZ',
       badgeTitle: '🌊 Kıyıdan Erişilemez (Açık Deniz)',
       badgeTone: 'blue',
-      summary: `Seçilen koordinat kıyı çizgisinin yaklaşık ~${geo.distanceToCoastKm ?? '?'} km açığında, açık denizdedir. Kıyıdan olta atış menzilinin dışındadır; yalnızca tekne/açık deniz avcılığı için coğrafi olarak denizdir. Kıyı balıkçılığına uygun değildir.`,
+      summary: `Seçilen koordinat kıyı çizgisinin yaklaşık ~${geo.distanceToCoastKm ?? '?'} km açığında, açık denizdedir. Kıyıdan olta atış menzilinin dışındadır (açık su / tekne alanıdır). Kıyı balıkçılığına uygun değildir.`,
       coastalStructureInfo: 'Açık Deniz / Açık Su Alanı',
-      generalFishingConditions: 'Kıyıdan olta atılamaz. Tekneyle avcılıkta açık deniz seyir güvenliği, can yeleği ve hava durumu kontrolleri zorunludur.',
+      generalFishingConditions: 'Kıyıdan olta atılamaz. Tekneyle avcılıkta açık deniz seyir güvenliği, can yeleği ve hava durumu kontrolleri zorunludur. Erişim ve güvenlik sahada doğrulanmalı.',
       missingDataWarnings: [
-        'Kıyıdan olta atış menzili dışındadır.',
-        'Resmi batimetri (derinlik) veya batık bilgisi bulunmamaktadır.'
+        'Kıyıdan olta atış menzili dışındadır; güvenli kıyı platformu yoktur.',
+        'Resmi batimetri (derinlik) veya batık bilgisi bulunmamaktadır.',
+        'Erişim ve güvenlik sahada doğrulanmalı (açık deniz seyir koşulları geçerlidir).'
       ],
-      disclaimer: 'Açık su alanı; amatör kıyı balıkçılığı menzili dışındadır.'
+      disclaimer: 'Açık su alanı; amatör kıyı balıkçılığı menzili dışındadır. Erişim ve güvenlik sahada doğrulanmalı.'
     };
   }
 
@@ -1044,15 +1100,16 @@ export function assessPointFishingSuitability(
       status: 'YETERLI_VERI_YOK',
       badgeTitle: '⚠️ Yeterli Veri Yok (Kayıtsız Kıyı Bandı)',
       badgeTone: 'amber',
-      summary: `Seçilen koordinat kıyı çizgisine yaklaşık ~${geo.distanceToCoastKm !== null ? Math.round(geo.distanceToCoastKm * 1000) : '?'} metre mesafededir (geometrik kıyı bandı). Ancak bu noktada kayıtlı bir mera, mendirek veya güvenli olta atış yeri teyit edilmemiştir.`,
-      coastalStructureInfo: 'Kayıtsız Kıyı Şeridi (~450 m geometrik kıyı bandı)',
-      generalFishingConditions: 'Kıyıya fiziksel erişim yolu, falez/uçurum durumu ve özel mülkiyet kısıtları sahada yerinde incelenmelidir.',
+      summary: `Seçilen koordinat kıyı çizgisine yaklaşık ~${geo.distanceToCoastKm !== null ? Math.round(geo.distanceToCoastKm * 1000) : '?'} metre mesafededir (~450 metre kıyı bandı yaklaşık geometrik bir sınıflandırma eşiğidir, resmî kıyı kenar çizgisi değildir). Bu noktada kayıtlı bir mera, mendirek veya güvenli olta atış yeri teyit edilmemiştir. Erişim ve güvenlik sahada doğrulanmalı.`,
+      coastalStructureInfo: 'Kayıtsız Kıyı Şeridi (~450 m yaklaşık geometrik kıyı bandı; resmî kıyı kenar çizgisi değildir)',
+      generalFishingConditions: 'Kıyıya fiziksel erişim yolu, falez/uçurum durumu ve özel mülkiyet kısıtları sahada yerinde incelenmelidir. Erişim ve güvenlik sahada doğrulanmalı, yerel kurallara uyulmalıdır.',
       missingDataWarnings: [
+        'Erişim ve güvenlik sahada doğrulanmalı (fiziki yapının varlığı güvenli erişim anlamına gelmez).',
         'Kayıtlı ve doğrulanmış mera kaydı bulunmamaktadır.',
-        'Batimetri (derinlik), dip yapısı ve akıntı ölçümü yoktur; kesin atış mesafesi tavsiye edilmez.',
-        'Balık yoğunluğu veya av verimi garantisi verilemez.'
+        'Batimetri (derinlik), dip yapısı ve akıntı ölçümü yoktur; belirli bir derinlik veya atış mesafesi verilemez.',
+        'Balık mevcudiyeti, yoğunluğu veya av verimi garantisi verilemez.'
       ],
-      disclaimer: 'Yalnızca geometrik kıyı yakınlığı tespit edilmiştir; doğrulanmış avlak değildir.'
+      disclaimer: 'Yalnızca geometrik kıyı yakınlığı tespit edilmiştir; doğrulanmış avlak değildir. Erişim ve güvenlik sahada doğrulanmalı.'
     };
   }
 
@@ -1061,10 +1118,13 @@ export function assessPointFishingSuitability(
     status: 'YETERLI_VERI_YOK',
     badgeTitle: '❓ Belirsiz / Yeterli Veri Yok',
     badgeTone: 'slate',
-    summary: 'Mevcut coğrafi verinin çözünürlüğü bu koordinatı güvenilir biçimde sınıflandırmak için yetersizdir. Kıyıdan avlanma uygunluğu coğrafi veriyle doğrulanamamıştır.',
+    summary: 'Mevcut coğrafi verinin çözünürlüğü bu koordinatı güvenilir biçimde sınıflandırmak için yetersizdir. Kıyıdan avlanma uygunluğu coğrafi veriyle doğrulanamamıştır. Erişim ve güvenlik sahada doğrulanmalı.',
     coastalStructureInfo: 'Coğrafi Veriyle Doğrulanamadı',
     generalFishingConditions: 'Uydu veya harita altlığı incelenmeli, yerel sahadan bilgi alınmalıdır.',
-    missingDataWarnings: ['Kıyı-kara sınır çözünürlüğü yetersizdir.'],
-    disclaimer: 'Yeterli coğrafi veri bulunmamaktadır.'
+    missingDataWarnings: [
+      'Kıyı-kara sınır çözünürlüğü yetersizdir.',
+      'Erişim ve güvenlik sahada doğrulanmalı.'
+    ],
+    disclaimer: 'Yeterli coğrafi veri bulunmamaktadır. Erişim ve güvenlik sahada doğrulanmalı.'
   };
 }

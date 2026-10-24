@@ -18,8 +18,14 @@ export const RegionPickerModal: React.FC<RegionPickerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-[#0e1626] border border-slate-700 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-[#0e1626] border border-slate-700 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 max-h-[85dvh] flex flex-col"
+      >
         
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
           <div>

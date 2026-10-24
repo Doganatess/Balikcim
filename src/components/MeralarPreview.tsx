@@ -300,6 +300,20 @@ export const MeralarPreview: React.FC<MeralarPreviewProps> = ({ region, onSelect
                           ⚠️ <strong>Saha Uyarısı:</strong> {spot.cautions}
                         </div>
                       )}
+
+                      {/* Haritada Gör ve Konuma Git Butonu */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectRegionSpot) {
+                            onSelectRegionSpot(spot.name);
+                          }
+                        }}
+                        className="w-full mt-2.5 py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md shadow-cyan-950 cursor-pointer"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-white" />
+                        <span>Haritada Gör ve Konumu İncele</span>
+                      </button>
                     </div>
                   )}
                 </div>

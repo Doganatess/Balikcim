@@ -47,6 +47,7 @@ export default function App() {
   // Modals state
   const [regionPickerOpen, setRegionPickerOpen] = useState(false);
   const [detailModalFish, setDetailModalFish] = useState<FishSpecies | null>(null);
+  const [targetSpotForMap, setTargetSpotForMap] = useState<string | null>(null);
 
   // Save selected region
   const handleSelectRegion = (r: Region) => {
@@ -57,7 +58,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060A0F] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white pb-24">
+    <div className="min-h-screen bg-[#060A0F] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white pb-[calc(5.5rem+env(safe-area-inset-bottom,20px))]">
       
       {/* 1. Mobile Header with Balık Yakala Brand & Region Pill */}
       <Navbar
@@ -85,6 +86,8 @@ export default function App() {
               region={selectedRegion}
               selectedFish={selectedFish}
               onSelectFish={setSelectedFish}
+              targetSpotName={targetSpotForMap}
+              onClearTargetSpot={() => setTargetSpotForMap(null)}
             />
 
             {/* Active Fish Scores in selected region */}
@@ -125,11 +128,18 @@ export default function App() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: MERALAR (2.869 Spots, Favorites & Search) */}
+        {/* TAB 4: MERALAR (30 Spots, Favorites & Search) */}
         {/* ============================================================== */}
         {activeTab === 'meralar' && (
           <div className="animate-in fade-in duration-150">
-            <MeralarPreview region={selectedRegion} />
+            <MeralarPreview 
+              region={selectedRegion}
+              onSelectRegionSpot={(spotName) => {
+                setTargetSpotForMap(spotName);
+                setActiveTab('yakala');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
           </div>
         )}
 
