@@ -321,6 +321,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
       sstLayer.on('loading', () => {
         setSstLoading(true);
+        setSstError(null);
         loadedTiles = 0;
         erroredTiles = 0;
       });
@@ -339,6 +340,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           setSstError(null);
         } else if (erroredTiles > 0) {
           setSstError('NASA GIBS uydu döşemeleri yüklenemedi. Bağlantınızı veya servis durumunu kontrol ediniz.');
+        } else {
+          setSstError('NASA uydu görüntüsü doğrulanamadı veya bu bölge için döşeme verisi boş döndü.');
         }
       });
 
@@ -926,20 +929,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-0.5">
-                <div className="flex justify-between text-[9px] text-slate-400 font-mono">
-                  <span>Daha Soğuk (Mavi/Yeşil)</span>
-                  <span>Daha Sıcak (Sarı/Kırmızı)</span>
+              <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[9.5px] text-slate-300 leading-relaxed space-y-1">
+                <div>
+                  <strong className="text-rose-300">Renkler hakkında:</strong> Bu ekranda NASA katmanının gerçek renk skalası ve sıcaklık değerleri doğrulanmış değildir. Bu nedenle renkleri belirli sıcaklık dereceleri olarak yorumlamayın. Katmanın görünmesi, balık yoğunluğunu veya av başarısını göstermez.
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
-              </div>
-
-              <div className="text-[9px] text-slate-300 leading-normal">
-                Bu katman NASA GIBS kaynaklı deniz yüzeyi sıcaklığı görselleştirmesidir. Veri tarihi bu ekranda bağımsız olarak doğrulanmıyor. Renkler kesin sıcaklık ölçümü olarak yorumlanmamalıdır. Bu katman balık yoğunluğunu, kıyı derinliğini veya av başarısını göstermez.
-              </div>
-
-              <div className="text-[8.5px] text-slate-500 font-mono leading-tight">
-                * URL katmanı default/default parametresiyle çağrılmaktadır; anlık veya güncel veri garantisi verilmez.
+                <div className="text-[8.5px] text-slate-500 font-mono pt-0.5 border-t border-slate-800/80">
+                  * NASA GIBS GHRSST MUR L4 katmanı döşemeleri default/default ayarıyla çağrılmaktadır; anlık veya gerçek zamanlı kıyı ölçümü değildir.
+                </div>
               </div>
 
               {sstLoading && (
@@ -1234,20 +1230,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </div>
             </div>
 
-            <div className="space-y-0.5">
-              <div className="flex justify-between text-[9px] text-slate-400 font-mono">
-                <span>Daha Soğuk (Mavi/Yeşil)</span>
-                <span>Daha Sıcak (Sarı/Kırmızı)</span>
+            <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[9.5px] text-slate-300 leading-relaxed space-y-1">
+              <div>
+                <strong className="text-rose-300">Renkler hakkında:</strong> Bu ekranda NASA katmanının gerçek renk skalası ve sıcaklık değerleri doğrulanmış değildir. Bu nedenle renkleri belirli sıcaklık dereceleri olarak yorumlamayın. Katmanın görünmesi, balık yoğunluğunu veya av başarısını göstermez.
               </div>
-              <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 via-amber-400 to-rose-600 opacity-90"></div>
-            </div>
-
-            <div className="text-[9px] text-slate-300 leading-normal">
-              Bu katman NASA GIBS kaynaklı deniz yüzeyi sıcaklığı görselleştirmesidir. Veri tarihi bu ekranda bağımsız olarak doğrulanmıyor. Renkler kesin sıcaklık ölçümü olarak yorumlanmamalıdır. Bu katman balık yoğunluğunu, kıyı derinliğini veya av başarısını göstermez.
-            </div>
-
-            <div className="text-[8.5px] text-slate-500 font-mono leading-tight">
-              * URL katmanı default/default parametresiyle çağrılmaktadır; anlık veya güncel veri garantisi verilmez.
+              <div className="text-[8.5px] text-slate-500 font-mono pt-0.5 border-t border-slate-800/80">
+                * NASA GIBS GHRSST MUR L4 katmanı döşemeleri default/default ayarıyla çağrılmaktadır; anlık veya gerçek zamanlı kıyı ölçümü değildir.
+              </div>
             </div>
 
             {sstLoading && (
