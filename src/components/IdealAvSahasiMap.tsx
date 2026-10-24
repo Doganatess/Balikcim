@@ -27,7 +27,9 @@ import {
   SAMSUN_ORDU_BOUNDS, 
   SAMSUN_ORDU_CENTER,
   classifyPointGeography,
-  PointClassificationResult
+  PointClassificationResult,
+  assessPointFishingSuitability,
+  PointSuitabilityAssessment
 } from '../data/samsunOrduMapData';
 
 interface IdealAvSahasiMapProps {
@@ -673,8 +675,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     }
   }, [setFollowState]);
 
-  // Compute coastline classification for currently selected coordinate
+  // Compute coastline classification and amateur fishing suitability for currently selected coordinate
   const geoAnalysis: PointClassificationResult = classifyPointGeography(selectedCoord.lat, selectedCoord.lng);
+  const suitability: PointSuitabilityAssessment = assessPointFishingSuitability(selectedSpot, geoAnalysis);
 
   return (
     <div id="av-sahasi" className="w-full max-w-4xl mx-auto px-4 sm:px-6 pt-2 pb-4">
@@ -1279,6 +1282,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       </div>
 
       <div className="mt-3.5 p-4 rounded-2xl bg-[#0e1626] border border-cyan-500/30 shadow-xl space-y-3">
+        {/* Header: Spot Name / Free Coordinate & Classification Badge */}
         <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-red-950/80 border border-red-500/40 flex items-center justify-center text-red-400 text-xs shrink-0">
@@ -1287,7 +1291,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             <div className="min-w-0">
               <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5 flex-wrap">
                 <span className="truncate">
-                  {selectedSpot ? selectedSpot.name : 'Haritada Seçilen Koordinat'}
+                  {selectedSpot ? selectedSpot.name : 'Serbest Harita Koordinatı'}
                 </span>
 
                 {selectedSpot ? (
@@ -1301,8 +1305,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     {selectedSpot.verificationBadge}
                   </span>
                 ) : (
-                  <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded font-semibold">
-                    Serbest Seçim Noktası
+                  <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded font-semibold border border-slate-700">
+                    Kayıtlı Mera Değil (Serbest Nokta)
                   </span>
                 )}
               </div>
@@ -1311,7 +1315,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 <span>{selectedCoord.lat.toFixed(4)}° N, {selectedCoord.lng.toFixed(4)}° E</span>
                 {geoAnalysis.distanceToCoastKm !== null && (
                   <span className="text-[10px] text-slate-400 font-sans">
-                    (Kıyı referans çizgisine ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`}; eşik: ~450 m)
+                    (Kıyı çizgisine ~{geoAnalysis.distanceToCoastKm >= 1 ? `${geoAnalysis.distanceToCoastKm} km` : `${Math.round(geoAnalysis.distanceToCoastKm * 1000)} m`})
+                  </span>
+                )}
+                {selectedSpot && (
+                  <span className="text-[10px] text-slate-400 font-sans">
+                    · {selectedSpot.city} ({selectedSpot.district})
                   </span>
                 )}
               </div>
@@ -1326,6 +1335,8 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                 : geoAnalysis.zoneType === 'kara'
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                : geoAnalysis.zoneType === 'belirsiz'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                 : 'bg-slate-800 text-slate-400 border border-slate-700'
             }`}>
               {geoAnalysis.zone}
@@ -1333,91 +1344,106 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {selectedSpot ? (
-          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
-            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
-              <span>Mera Konum Teyit Kapsamı:</span>
-              <span className="text-slate-400 font-mono">{selectedSpot.city} · {selectedSpot.district}</span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">{selectedSpot.verificationNote}</p>
-            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Önemli:</strong> Coğrafi konumun doğrulanması balık veriminin, derinliğin veya güvenliğin doğrulandığı anlamına gelmez.
-            </div>
-            {selectedSpot.cautions && (
-              <p className="text-amber-400/90 text-[10px] pt-0.5 flex items-start gap-1">
-                <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                <span>{selectedSpot.cautions}</span>
-              </p>
-            )}
+        {/* Amatör Kıyı Balıkçılığı Uygunluk Değerlendirmesi */}
+        <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 text-xs space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-1.5">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <span>🎣 Kıyıdan Balıkçılık Uygunluk Değerlendirmesi</span>
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              suitability.badgeTone === 'cyan'
+                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
+                : suitability.badgeTone === 'emerald'
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                : suitability.badgeTone === 'blue'
+                ? 'bg-blue-950/80 text-blue-300 border-blue-500/50'
+                : suitability.badgeTone === 'amber'
+                ? 'bg-amber-950/80 text-amber-300 border-amber-500/50'
+                : suitability.badgeTone === 'red'
+                ? 'bg-red-950/80 text-red-300 border-red-500/50'
+                : 'bg-slate-800 text-slate-300 border-slate-700'
+            }`}>
+              {suitability.badgeTitle}
+            </span>
           </div>
-        ) : (
-          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1">
-            <div className="text-slate-400 text-[10px] font-semibold mb-0.5">Konum Analizi & Referans:</div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">{geoAnalysis.description}</p>
-            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800/80">
-              <strong>Geometrik Kıyı Eşiği:</strong> Sınıflandırma, GeoJSON kara poligonu sınırına uygulanan 450 metrelik geometrik tampon eşiğine dayanır. Bu eşik resmi kadastro kıyı kenar çizgisi, balıkçılık sahası garantisi veya yasal avlanma sınırı değildir; yalnızca haritada karasal alan ile kıyı bandını ayıran yaklaşık bir geometrik referanstır.
-            </div>
-            {geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
-              <p className="text-cyan-400 text-[10px] pt-0.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span>En yakın kayıtlı mera: <strong>{geoAnalysis.nearestSpot.name}</strong> (~{geoAnalysis.distanceToNearestSpotKm} km)</span>
-              </p>
-            )}
-          </div>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-            <span className="text-slate-400 text-[10px] font-semibold">Kıyı Yapısı / Zemin:</span>
-            <div className="font-bold text-slate-200">
-              {selectedSpot ? selectedSpot.locationType : (geoAnalysis.zoneType === 'kiyi' ? 'Karadeniz Kıyı Bandı' : geoAnalysis.zone)}
+          <p className="text-slate-300 text-[11.5px] leading-relaxed">
+            {suitability.summary}
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px]">
+            <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
+              <strong className="text-slate-400 block mb-0.5">Fiziksel Yapı & Zemin:</strong>
+              <span className="text-slate-300">{suitability.coastalStructureInfo}</span>
             </div>
-            <div className="text-[10px] text-slate-400 leading-tight">
-              {selectedSpot ? selectedSpot.verifiedGeoFeature : geoAnalysis.dataNotice}
+            <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
+              <strong className="text-slate-400 block mb-0.5">Kıyı Koşulları & Güvenlik:</strong>
+              <span className="text-slate-300">{suitability.generalFishingConditions}</span>
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-            <span className="text-slate-400 text-[10px] font-semibold">Batimetri (Derinlik) & Atış Analizi:</span>
-            <div className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
-              <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
-              <span>{selectedSpot ? selectedSpot.depthStatus : 'Doğrulanmış batimetri ölçümü bulunmuyor'}</span>
+          {/* Eksik veya Doğrulanmamış Bilgiler & Sınırlamalar */}
+          <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/40 text-[10px] text-slate-300 space-y-1">
+            <div className="font-semibold text-amber-300 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3 shrink-0 text-amber-400" />
+              <span>Eksik / Doğrulanmamış Bilgiler & Sınırlamalar:</span>
             </div>
-            <div className="text-[10px] text-slate-400 leading-tight">
-              Ölçülmüş sualtı derinlik haritası veya batimetri sensörü bulunmamaktadır; tahmini metre değeri verilmez. Kıyı eğimi doğrulanmadan kesin atış mesafesi tavsiye edilmez.
+            <ul className="list-disc pl-4 space-y-0.5 text-slate-300">
+              {suitability.missingDataWarnings.map((warning, idx) => (
+                <li key={idx}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* En Yakın Kayıtlı Mera Bilgisi (Serbest seçim yapıldığında gösterilir) */}
+          {!selectedSpot && geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (
+            <div className="p-2 rounded-lg bg-cyan-950/30 border border-cyan-800/40 text-[10.5px] text-cyan-300 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+              <span>
+                En yakın kayıtlı mera: <strong>{geoAnalysis.nearestSpot.name}</strong> (~{geoAnalysis.distanceToNearestSpotKm} km mesafede — <em>Tıkladığınız serbest nokta bu mera ile aynı yer değildir</em>).
+              </span>
             </div>
+          )}
+
+          {/* Şeffaflık & Sorumluluk Notu */}
+          <div className="text-[9px] text-slate-500 pt-1 border-t border-slate-800/80 leading-normal">
+            * {suitability.disclaimer} {geoAnalysis.dataNotice}
           </div>
         </div>
 
+        {/* Hedef Tür ve Model Skoru Bilgisi */}
         <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="text-xl shrink-0">{selectedFish.emoji}</span>
             <div className="min-w-0">
               <span className="font-bold text-slate-200 text-xs">
-                {selectedFish.name} — Genel Tür Tavsiyesi:
+                {selectedFish.name} — Genel Tür Rehberi:
               </span>
               <div className="text-[10px] text-slate-400 leading-snug">
                 {geoAnalysis.zoneType === 'deniz'
-                  ? 'Açık su alanı: Kıyıdan erişilemez; tekneden sırtı veya jigging avlanma biçimi uygundur.'
+                  ? 'Açık deniz alanı: Kıyı atış menzilinin dışındadır; kıyıdan erişilemez (yalnızca tekne/sırtı avcılığı uygundur).'
+                  : geoAnalysis.zoneType === 'kara'
+                  ? 'Karasal alan seçildi; deniz kıyısı veya olta atış imkânı bulunmamaktadır.'
                   : geoAnalysis.zoneType === 'kiyi'
-                  ? `Mevsimsel olarak ${selectedFish.bestHours} saatlerinde kıyıdan ${selectedFish.bestBaits[0]} ile denenebilir.`
-                  : 'Karasal alan seçildi; kıyı hattına veya liman bölgesine yaklaşınız.'}
+                  ? `Seçilen kıyı bandında ${selectedFish.name} için genel mevsimsel pencereler (${selectedFish.bestHours}) ve önerilen yemler (${selectedFish.bestBaits[0]}) denenebilir; ancak balık bulunma garantisi yoktur.`
+                  : 'Yeterli coğrafi veri bulunmadığından bu koordinatta türe özel kıyı tavsiyesi üretilememiştir.'}
               </div>
             </div>
           </div>
 
           <div className="text-right shrink-0">
             <div className="text-xs font-mono font-bold text-cyan-400">%{selectedFish.currentScore}</div>
-            <div className="text-[9px] text-slate-500 leading-tight">Örnek Model Skoru<br/>(Tutulma garantisi değildir)</div>
+            <div className="text-[9px] text-slate-500 leading-tight">Örnek Model Skoru<br/>(Balık garantisi değildir)</div>
           </div>
         </div>
 
+        {/* Alt Bilgi */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
           <div>
-            <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kıyı Çizgisi:</strong> Yaklaşık elle tanımlanmış referans çizgisi
+            <strong>Harita Altlığı:</strong> OpenStreetMap Katkıda Bulunanlar · <strong>Kara-Deniz Sınırı:</strong> GeoJSON Kara Poligonu
           </div>
           <div className="text-amber-400/90 font-mono">
-            ⚠ Canlı rüzgâr/dalga sensörü bağlı değildir. Güvenlik için yerel hava durumunu kontrol ediniz.
+            ⚠ Gerçek zamanlı kıyı sensörü yoktur. Güvenlik için yerel hava durumunu kontrol ediniz.
           </div>
         </div>
       </div>
