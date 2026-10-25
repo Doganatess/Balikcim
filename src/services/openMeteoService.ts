@@ -24,6 +24,8 @@ export interface HourlyForecastItem {
   windDirectionDeg?: number;
   waveHeight?: number;
   wavePeriod?: number;
+  hasMarineWaveData?: boolean;
+  waveSource?: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil';
   weatherCode?: number;
   safetyRating: 'Uygun' | 'Dikkat' | 'Riskli' | 'Belirsiz';
   safetyExplanation: string;
@@ -474,6 +476,10 @@ export async function fetchLiveMarineAndWeather(
             windDirectionDeg: hWindDeg,
             waveHeight: Math.round(hWave * 10) / 10,
             wavePeriod: Math.round(hWavePeriod),
+            hasMarineWaveData: hasHourlyMarine,
+            waveSource: hasHourlyMarine
+              ? 'Açık Deniz Dalga Modeli (Open-Meteo Marine)'
+              : 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil',
             weatherCode: weatherData.hourly.weather_code?.[i],
             safetyRating: hourSafety.rating,
             safetyExplanation: hourSafety.summary

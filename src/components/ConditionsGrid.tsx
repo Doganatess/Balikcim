@@ -124,19 +124,6 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Güncel veri yok — güvenlik değerlendirilemiyor.'
   };
 
-  // Geçerli API verisi veya geçerli güncel önbellek olduğunda mevcut güvenlik değerlendirmesini koru.
-  // Marine API verisi eksikse veya API'ye ulaşılamamışsa kesin "Güvenli/Uygun" sonucu verme!
-  const activeSafety = isLiveOrCached
-    ? evaluatePracticalSafety(
-        c.windSpeed, 
-        c.waveHeight, 
-        c.wavePeriod, 
-        c.rainChance, 
-        activeLocationType === 'tekne',
-        c.hasValidMarineData
-      )
-    : createUnavailableSafetyAssessment();
-
   // Planlama modu seçilmişse, seçilen saatin tahmin verilerini al
   const plannedHour: HourlyForecastItem | undefined =
     c.hourlyForecast && c.hourlyForecast.length > 0
@@ -150,6 +137,28 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
   const displayWindDir = activeMode === 'planla' && plannedHour?.windDirection ? plannedHour.windDirection : c.windDirection;
   const displayWaveHeight = activeMode === 'planla' && plannedHour?.waveHeight !== undefined ? plannedHour.waveHeight : c.waveHeight;
   const displayWavePeriod = activeMode === 'planla' && plannedHour?.wavePeriod !== undefined ? plannedHour.wavePeriod : c.wavePeriod;
+
+  // Saatlik tahmin veya anlık durum için deniz verisi geçerliliği ve kaynak etiketini saat bazında takip et
+  const displayHasValidMarineData = activeMode === 'planla' && plannedHour
+    ? Boolean(plannedHour.hasMarineWaveData)
+    : c.hasValidMarineData;
+
+  const displayWaveSource = activeMode === 'planla' && plannedHour?.waveSource
+    ? plannedHour.waveSource
+    : c.waveSource;
+
+  // Geçerli API verisi veya geçerli güncel önbellek olduğunda mevcut güvenlik değerlendirmesini koru.
+  // Marine API verisi eksikse veya API'ye ulaşılamamışsa kesin "Güvenli/Uygun" sonucu verme; güvenlik Belirsiz kalsın!
+  const activeSafety = isLiveOrCached
+    ? evaluatePracticalSafety(
+        displayWindSpeed, 
+        displayWaveHeight, 
+        displayWavePeriod, 
+        displayRainChance, 
+        activeLocationType === 'tekne',
+        displayHasValidMarineData
+      )
+    : createUnavailableSafetyAssessment();
 
   return (
     <div id="kosullar" className="w-full max-w-4xl mx-auto px-4 sm:px-6">
@@ -368,7 +377,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                     </div>
                     <div className="text-[11px] text-slate-400">
                       Rüzgâr: <strong className="text-slate-200">{plannedHour.windSpeed} km/sa {plannedHour.windDirection}</strong> · 
-                      Dalga: <strong className="text-slate-200">{plannedHour.waveHeight} m</strong> {!c.hasValidMarineData ? <span className="text-amber-400/90 text-[10px] font-normal">(Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil)</span> : null} · 
+                      Dalga: <strong className="text-slate-200">{plannedHour.waveHeight} m</strong> {!displayHasValidMarineData ? <span className="text-amber-400/90 text-[10px] font-normal">(Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil)</span> : null} · 
                       Yağış İhtimali: <strong className="text-slate-200">%{plannedHour.rainProb}</strong>
                     </div>
                   </div>
@@ -566,7 +575,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             <span className="text-[10px] text-slate-500 font-mono">
               {!isLiveOrCached 
                 ? 'Referans' 
-                : !c.hasValidMarineData 
+                : !displayHasValidMarineData 
                 ? 'Türetilmiş' 
                 : `${displayWavePeriod}s`}
             </span>
@@ -576,11 +585,11 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           </div>
           <div 
             className="text-[9.5px] truncate mt-0.5" 
-            title={!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : c.waveSource}
+            title={!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : displayWaveSource}
           >
             {!isLiveOrCached ? (
               <span className="text-slate-500">Referans veri, güncel ölçüm değil</span>
-            ) : !c.hasValidMarineData ? (
+            ) : !displayHasValidMarineData ? (
               <span className="text-amber-400/90 font-medium">Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil</span>
             ) : (
               <span className="text-slate-500">Açık Deniz Modeli (Open-Meteo Marine)</span>
