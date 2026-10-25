@@ -23,14 +23,14 @@ export interface HourlyForecastItem {
   waveHeight?: number;
   wavePeriod?: number;
   weatherCode?: number;
-  safetyRating: 'Uygun' | 'Dikkat' | 'Riskli';
+  safetyRating: 'Uygun' | 'Dikkat' | 'Riskli' | 'Belirsiz';
   safetyExplanation: string;
 }
 
 export interface PracticalSafetyAssessment {
-  rating: 'Uygun' | 'Dikkat' | 'Riskli';
+  rating: 'Uygun' | 'Dikkat' | 'Riskli' | 'Belirsiz';
   badgeTitle: string;
-  badgeTone: 'emerald' | 'amber' | 'red';
+  badgeTone: 'emerald' | 'amber' | 'red' | 'slate';
   summary: string;
   factors: {
     windStatus: string;
@@ -185,6 +185,36 @@ export function evaluatePracticalSafety(
       'Kıyıdan avlanmanın güvenliği kesin olarak garanti edilemez.',
       'Erişim, falez stabilitesi, kaygan taşlar ve ani hava değişimleri sahada bizzat doğrulanmalıdır.',
       ...warnings
+    ]
+  };
+}
+
+/**
+ * Open-Meteo verisi alınamadığında veya geçerli güncel önbellek bulunmadığında
+ * sabit bölgesel referans değerlerinden yapay güvenlik sonucu üretilmesini engelleyen
+ * açık, dürüst ve şeffaf durum değerlendirmesi.
+ */
+export function createUnavailableSafetyAssessment(): PracticalSafetyAssessment {
+  return {
+    rating: 'Belirsiz',
+    badgeTitle: 'Güncel veri yok — güvenlik değerlendirilemiyor',
+    badgeTone: 'slate',
+    summary: 'Canlı hava ve deniz tahmin verisi alınamadığı veya geçerli güncel önbellek bulunmadığı için güvenlik değerlendirilemiyor. Referans değerler güncel ölçüm değildir; sahada bizzat gözlem yapınız.',
+    factors: {
+      windStatus: 'Canlı rüzgâr verisi yok (Referans veri, güncel ölçüm değil).',
+      waveStatus: 'Canlı dalga verisi yok (Referans veri, güncel ölçüm değil).',
+      rainStatus: 'Canlı yağış verisi yok (Güncel tahmin bulunmuyor).',
+      currentStatus: 'Canlı ölçüm sensörü ve anlık model verisi yok.'
+    },
+    dataSourceNotes: [
+      'Open-Meteo sayısal tahmin sunucusuna ulaşılamadı veya geçerli güncel önbellek bulunamadı.',
+      'Görüntülenen değerler yalnızca istatistiksel yerel referans baselinedir, anlık ölçüm değildir.',
+      'Sabit referans değerlerinden yapay güvenlik skoru veya kesin av saati üretilmez.'
+    ],
+    safetyWarnings: [
+      'Güncel hava ve deniz tahmini olmadan kıyı veya tekne güvenliği değerlendirilemez.',
+      'Falez kenarları, taş tahkimat ve mendireklerde dalga patlaması ve kayganlık riski her an sahada doğrulanmalıdır.',
+      'Hava değişimlerini ve rüzgâr sertleşmesini sahada bizzat izleyiniz.'
     ]
   };
 }
@@ -464,15 +494,15 @@ export async function fetchLiveMarineAndWeather(
     console.warn('Open-Meteo sayısal model çağrısı başarısız oldu, yerel referans model devrede:', error);
   }
 
-  // 3. API Başarısız Olduğunda: Sabit değerler canlıymış gibi gösterilmez, sahte puan üretilmez
+  // 3. API Başarısız Olduğunda: Sabit değerlerden gerçek zamanlı güvenlik skoru üretilmez!
   const moon = calculateAstronomicalMoonPhase(new Date());
   const nowFormatted = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const fallbackSafety = evaluatePracticalSafety(fallbackBaseline.windSpeed, fallbackBaseline.waveHeight, fallbackBaseline.wavePeriod, fallbackBaseline.rainChance, false);
+  const unavailableSafety = createUnavailableSafetyAssessment();
 
   const fallbackResult: LiveConditionsData = {
     airTemp: fallbackBaseline.airTemp,
     waterTemp: fallbackBaseline.waterTemp,
-    waterTempNote: 'Yerel kıyı ortalaması referansıdır',
+    waterTempNote: 'Referans veri, güncel ölçüm değil (Mevsimsel kıyı modeli referansı)',
     rainChance: fallbackBaseline.rainChance,
     precipitationMm: 0,
     waveHeight: fallbackBaseline.waveHeight,
@@ -492,17 +522,14 @@ export async function fetchLiveMarineAndWeather(
     moonPhaseIcon: moon.phaseIcon,
     solunarRating: moon.solunarRating,
     safetyStatus: 'Orta Dalgalı',
-    safetyAssessment: {
-      ...fallbackSafety,
-      summary: 'API verisi alınamadığı için değerlendirme yerel referans değerlerine dayanmaktadır; sahada teyit ediniz.'
-    },
+    safetyAssessment: unavailableSafety,
     bestWindow: fallbackBaseline.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
     modelTime: '--:--',
     fetchTime: nowFormatted,
-    lastUpdatedText: 'Çevrimdışı / Yedek Bölgesel Model (API Yanıt Vermedi)',
-    hourlyForecast: [], // Sahte tahmin puanı üretilmez!
-    apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Tahmin verisi yok; gösterilen değerler çevrimdışı yerel referans modelidir.'
+    lastUpdatedText: 'Referans veri, güncel ölçüm değil (API Yanıt Vermedi)',
+    hourlyForecast: [], // Sahte tahmin puanı veya saat üretilmez!
+    apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Güncel veri yok — güvenlik değerlendirilemiyor. Gösterilen değerler referans veridir, güncel ölçüm değildir.'
   };
 
   return fallbackResult;

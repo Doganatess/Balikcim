@@ -31,6 +31,7 @@ import {
   LiveConditionsData,
   HourlyForecastItem,
   evaluatePracticalSafety,
+  createUnavailableSafetyAssessment,
   degreeToTurkishDirection
 } from '../services/openMeteoService';
 
@@ -86,19 +87,13 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     };
   }, [region.id, region.lat, region.lng, region.name]);
 
-  // Sayısal model çıktısı varsa kullan, yoksa yerel referans modeli şeffaf olarak göster
-  const fallbackSafety = evaluatePracticalSafety(
-    region.conditions.windSpeed, 
-    region.conditions.waveHeight, 
-    region.conditions.wavePeriod, 
-    region.conditions.rainChance, 
-    activeLocationType === 'tekne'
-  );
+  // Canlı API verisi veya geçerli güncel önbellek var mı kontrolü
+  const isLiveOrCached = liveData !== null && (liveData.sourceStatus === 'MODEL_OPEN_METEO' || liveData.sourceStatus === 'ONBELLEK');
 
   const c: LiveConditionsData = liveData || {
     airTemp: region.conditions.airTemp,
     waterTemp: region.conditions.waterTemp,
-    waterTempNote: 'NASA GIBS & Copernicus referans modeli',
+    waterTempNote: 'Referans veri, güncel ölçüm değil (Mevsimsel kıyı modeli referansı)',
     rainChance: region.conditions.rainChance,
     precipitationMm: 0,
     waveHeight: region.conditions.waveHeight,
@@ -118,20 +113,21 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     moonPhaseIcon: region.conditions.moonPhaseIcon,
     solunarRating: region.conditions.solunarRating as any,
     safetyStatus: region.conditions.safetyStatus,
-    safetyAssessment: fallbackSafety,
+    safetyAssessment: createUnavailableSafetyAssessment(),
     bestWindow: region.conditions.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
     modelTime: '--:--',
     fetchTime: '--:--',
-    lastUpdatedText: 'Yedek Bölgesel Model (API Yanıt Vermedi)',
+    lastUpdatedText: 'Referans veri, güncel ölçüm değil (API Yanıt Vermedi)',
     hourlyForecast: [],
-    apiNotice: 'Canlı model verisi bekleniyor...'
+    apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Güncel veri yok — güvenlik değerlendirilemiyor.'
   };
 
-  // Dinamik olarak tekne/kıyı tercihine göre güvenlik değerlendirmesini güncelle
-  const activeSafety = liveData
+  // Geçerli API verisi veya geçerli güncel önbellek olduğunda mevcut güvenlik değerlendirmesini koru.
+  // API verisi alınamadığında veya geçerli önbellek bulunmadığında, sabit bölgesel referans değerlerinden güvenlik sonucu üretme!
+  const activeSafety = isLiveOrCached
     ? evaluatePracticalSafety(c.windSpeed, c.waveHeight, c.wavePeriod, c.rainChance, activeLocationType === 'tekne')
-    : fallbackSafety;
+    : createUnavailableSafetyAssessment();
 
   // Planlama modu seçilmişse, seçilen saatin tahmin verilerini al
   const plannedHour: HourlyForecastItem | undefined =
@@ -248,6 +244,8 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           <span className="font-medium text-slate-300">
             {isLoading 
               ? 'Open-Meteo sayısal tahmin modelleri sorgulanıyor...' 
+              : !isLiveOrCached
+              ? 'Referans veri, güncel ölçüm değil (API yanıt vermedi)'
               : activeMode === 'planla' && plannedHour
               ? `Planlanan Saat: ${plannedHour.hour} (${c.lastUpdatedText})`
               : c.lastUpdatedText}
@@ -255,7 +253,11 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
         </div>
 
         <div className="text-slate-400 font-mono text-[9.5px]">
-          {region.lat.toFixed(2)}°N, {region.lng.toFixed(2)}°E
+          {!isLiveOrCached ? (
+            <span className="text-amber-400 font-medium">GÜNCEL VERİ YOK</span>
+          ) : (
+            `${region.lat.toFixed(2)}°N, ${region.lng.toFixed(2)}°E`
+          )}
         </div>
       </div>
 
@@ -336,6 +338,8 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                             ? 'bg-red-950 text-red-300 border border-red-800'
                             : item.safetyRating === 'Dikkat'
                             ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                            : item.safetyRating === 'Belirsiz'
+                            ? 'bg-slate-800 text-slate-300 border border-slate-700'
                             : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                         }`}>
                           {item.safetyRating}
@@ -367,9 +371,11 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                         ? 'bg-red-950 text-red-300 border border-red-800'
                         : plannedHour.safetyRating === 'Dikkat'
                         ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : plannedHour.safetyRating === 'Belirsiz'
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700'
                         : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                     }`}>
-                      {plannedHour.safetyRating} Koşul
+                      {plannedHour.safetyRating}
                     </span>
                   </div>
                 </div>
@@ -390,14 +396,26 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           className="w-full mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#171a18] via-[#1a1c1d] to-[#171a18] border border-amber-950/40 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition group"
         >
           <div className="flex items-center gap-2 flex-wrap">
-            <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-amber-400">En iyi av saati</span>
-            <span className="text-xs text-slate-300 hidden sm:inline">· Bugün {c.bestWindow}</span>
+            {isLiveOrCached && c.hourlyForecast.length > 0 ? (
+              <>
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+                <span className="text-xs sm:text-sm font-bold text-amber-400">En iyi av saati</span>
+                <span className="text-xs text-slate-300 hidden sm:inline">· Bugün {c.bestWindow}</span>
+              </>
+            ) : (
+              <>
+                <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-bold text-slate-300">Tahmini av aralığı (Saatlik tahmin yok)</span>
+                <span className="text-xs text-slate-400 hidden sm:inline">· Referans aralık: {c.bestWindow}</span>
+              </>
+            )}
             <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
               activeSafety.rating === 'Riskli'
                 ? 'bg-red-950/90 text-red-300 border border-red-800'
                 : activeSafety.rating === 'Dikkat'
                 ? 'bg-amber-950/90 text-amber-300 border border-amber-800'
+                : activeSafety.rating === 'Belirsiz'
+                ? 'bg-slate-800 text-slate-300 border border-slate-700'
                 : 'bg-emerald-950/90 text-emerald-300 border border-emerald-800'
             }`}>
               {activeSafety.badgeTitle}
@@ -423,6 +441,8 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                 ? 'bg-red-950 text-red-300 border border-red-800'
                 : activeSafety.rating === 'Dikkat'
                 ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                : activeSafety.rating === 'Belirsiz'
+                ? 'bg-slate-800 text-slate-300 border border-slate-700'
                 : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
             }`}>
               {activeSafety.badgeTitle}
@@ -475,14 +495,14 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <span>Hava</span>
             </div>
             <span className="text-[9px] font-mono text-cyan-400">
-              {activeMode === 'planla' ? 'Tahmin' : 'Model 2m'}
+              {!isLiveOrCached ? 'Referans' : activeMode === 'planla' ? 'Tahmin' : 'Model 2m'}
             </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
             {displayAirTemp}°C
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Sayısal Hava Tahmini
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'Sayısal Hava Tahmini'}
           </div>
         </div>
 
@@ -493,13 +513,15 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Droplets className="w-3.5 h-3.5 text-cyan-400" />
               <span>Deniz</span>
             </div>
-            <span className="text-[9px] font-mono text-cyan-400">Model L4</span>
+            <span className="text-[9px] font-mono text-cyan-400">
+              {!isLiveOrCached ? 'Referans' : 'Model L4'}
+            </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
             {c.waterTemp}°C
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title={c.waterTempNote}>
-            NASA / Copernicus
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'NASA / Copernicus'}
           </div>
         </div>
 
@@ -511,14 +533,18 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <span>Yağış</span>
             </div>
             <span className="text-[9px] font-mono text-cyan-400">
-              {activeMode === 'planla' ? 'Olasılık' : 'Model'}
+              {!isLiveOrCached ? 'Referans' : activeMode === 'planla' ? 'Olasılık' : 'Model'}
             </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
             %{displayRainChance}
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            {activeMode === 'simdi' && c.precipitationMm > 0 ? `${c.precipitationMm} mm yağış` : 'Sayısal Model Tahmini'}
+            {!isLiveOrCached 
+              ? 'Referans veri, güncel ölçüm değil' 
+              : activeMode === 'simdi' && c.precipitationMm > 0 
+              ? `${c.precipitationMm} mm yağış` 
+              : 'Sayısal Model Tahmini'}
           </div>
         </div>
 
@@ -535,7 +561,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             {displayWaveHeight} <span className="text-xs font-normal text-slate-400">m</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title="Açık deniz dalga modelidir; kıyı sığlaşması/kırılması dahil değildir.">
-            {c.waveSource === 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' ? 'Açık Deniz Modeli' : c.waveSource}
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : c.waveSource === 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' ? 'Açık Deniz Modeli' : c.waveSource}
           </div>
         </div>
 
@@ -552,7 +578,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             {displayWindSpeed} <span className="text-xs font-normal text-slate-400">km/s</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Open-Meteo 10m Modeli
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'Open-Meteo 10m Modeli'}
           </div>
         </div>
 
@@ -580,13 +606,15 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Cloud className="w-3.5 h-3.5 text-indigo-400" />
               <span>Bulut</span>
             </div>
-            <span className="text-[9px] font-mono text-cyan-400">Model</span>
+            <span className="text-[9px] font-mono text-cyan-400">
+              {!isLiveOrCached ? 'Referans' : 'Model'}
+            </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
             %{c.cloudCoverage}
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Sayısal Bulutluluk
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'Sayısal Bulutluluk'}
           </div>
         </div>
 
@@ -603,7 +631,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             {c.pressure} <span className="text-xs font-normal text-slate-400">hPa</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            İndirgenmiş Basınç (MSL)
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'İndirgenmiş Basınç (MSL)'}
           </div>
         </div>
 
