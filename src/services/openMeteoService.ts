@@ -51,7 +51,8 @@ export interface LiveConditionsData {
   waveHeight: number; // metre
   wavePeriod: number; // saniye
   waveDirection: string;
-  waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Kıyı Rüzgâr Tahmini' | 'Referans Model';
+  waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil' | 'Referans Model';
+  hasValidMarineData: boolean;
   windSpeed: number; // km/sa
   windDirection: string; // K, KD, G, GB, vb.
   windDirectionDeg: number;
@@ -104,11 +105,12 @@ export function evaluatePracticalSafety(
   waveHeight: number,
   wavePeriod: number,
   rainProb: number,
-  isBoat: boolean = false
+  isBoat: boolean = false,
+  hasMarineData: boolean = true
 ): PracticalSafetyAssessment {
   const warnings: string[] = [];
-  let rating: 'Uygun' | 'Dikkat' | 'Riskli' = 'Uygun';
-  let badgeTone: 'emerald' | 'amber' | 'red' = 'emerald';
+  let rating: 'Uygun' | 'Dikkat' | 'Riskli' | 'Belirsiz' = 'Uygun';
+  let badgeTone: 'emerald' | 'amber' | 'red' | 'slate' = 'emerald';
   let badgeTitle = '✅ Uygun Koşullar';
 
   // Rüzgâr ve Dalga Değerlendirmesi
@@ -139,13 +141,20 @@ export function evaluatePracticalSafety(
     warnings.push('Rüzgâr şiddetlenirse kıyı taşlarında denge kaybına yol açabilir.');
   }
 
-  let waveStatus = `Sakin deniz (~${waveHeight} m); kıyı serpintisi asgari düzeyde.`;
-  if (waveHeight >= 1.4) {
-    waveStatus = `Yüksek dalga (~${waveHeight} m); mendirek ve kayalıkları aşabilir.`;
-    warnings.push('Taş tahkimat ve mendirek üzerine dalga patlaması riski bulunmaktadır; kıyıdan uzak durunuz.');
-  } else if (waveHeight >= 0.8 || isLongPeriodSwell) {
-    waveStatus = `Orta kabarmış deniz (~${waveHeight} m${isLongPeriodSwell ? ', solugan periyot: ' + wavePeriod + 's' : ''}); kaygan taşlara dikkat.`;
-    warnings.push('Dalga serpintisi kaygan taşlarda düşme tehlikesi yaratır; su geçirmez tabanlı ayakkabı zorunludur.');
+  let waveStatus = hasMarineData
+    ? `Sakin deniz (~${waveHeight} m); kıyı serpintisi asgari düzeyde.`
+    : `Marine API dalga verisi yok (Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil: ~${waveHeight} m).`;
+
+  if (hasMarineData) {
+    if (waveHeight >= 1.4) {
+      waveStatus = `Yüksek dalga (~${waveHeight} m); mendirek ve kayalıkları aşabilir.`;
+      warnings.push('Taş tahkimat ve mendirek üzerine dalga patlaması riski bulunmaktadır; kıyıdan uzak durunuz.');
+    } else if (waveHeight >= 0.8 || isLongPeriodSwell) {
+      waveStatus = `Orta kabarmış deniz (~${waveHeight} m${isLongPeriodSwell ? ', solugan periyot: ' + wavePeriod + 's' : ''}); kaygan taşlara dikkat.`;
+      warnings.push('Dalga serpintisi kaygan taşlarda düşme tehlikesi yaratır; su geçirmez tabanlı ayakkabı zorunludur.');
+    }
+  } else {
+    warnings.push('Marine API dalga ve deniz verisi eksiktir. Belirtilen dalga yüksekliği rüzgârdan türetilmiştir; açık deniz soluganı (swell) ve kıyı kırılması bu tahmine dahil değildir.');
   }
 
   let rainStatus = `Düşük yağış ihtimali (%${rainProb}).`;
@@ -165,6 +174,16 @@ export function evaluatePracticalSafety(
     summary = 'Rüzgâr, dalga serpintisi veya yağış dikkat gerektirmektedir. Sahada emniyetli basamaklar seçilmeli, can yeleği ve hava takibi ihmal edilmemelidir.';
   }
 
+  // Deniz verisi eksik olduğunda güvenlik değerlendirmesi:
+  // Eksik dalga verisine dayanarak kesin “Güvenli/Uygun” sonucu verme;
+  // değerlendirmeyi “Eksik veri — güvenlik tam değerlendirilemiyor” şeklinde belirt.
+  if (!hasMarineData) {
+    rating = 'Belirsiz';
+    badgeTone = 'amber';
+    badgeTitle = 'Eksik veri — güvenlik tam değerlendirilemiyor';
+    summary = 'Hava tahmini mevcut ancak Marine API dalga/deniz verisi eksiktir. Rüzgârdan türetilen yaklaşık dalga tahminiyle kesin Güvenli/Uygun sonucu verilemez; güvenlik tam değerlendirilemiyor. Sahada deniz ve kıyı koşullarını bizzat gözlemleyiniz.';
+  }
+
   return {
     rating,
     badgeTitle,
@@ -177,8 +196,12 @@ export function evaluatePracticalSafety(
       currentStatus
     },
     dataSourceNotes: [
-      'Değerlendirme Open-Meteo sayısal atmosfer ve açık deniz dalga modeline dayanır.',
-      'Sualtı batimetrisi ve taban takılma riskleri bu değerlendirmeye dahil değildir.',
+      hasMarineData
+        ? 'Değerlendirme Open-Meteo sayısal atmosfer ve açık deniz dalga modeline dayanır.'
+        : 'Atmosfer verisi Open-Meteo modelinden alınmıştır; Marine API dalga verisi eksiktir.',
+      hasMarineData
+        ? 'Sualtı batimetrisi ve taban takılma riskleri bu değerlendirmeye dahil değildir.'
+        : 'Dalga boyu rüzgârdan türetilmiş tahmindir; gerçek dalga ölçümü değildir.',
       'Akıntı hızı hesaplanan teorik yaklaşımdır; yerinde ölçüm sensörü yoktur.'
     ],
     safetyWarnings: [
@@ -337,9 +360,15 @@ export async function fetchLiveMarineAndWeather(
       let waveHeight = fallbackBaseline.waveHeight;
       let wavePeriod = fallbackBaseline.wavePeriod;
       let waveDirection = windDirection;
-      let waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Kıyı Rüzgâr Tahmini' | 'Referans Model' = 'Referans Model';
+      let waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil' | 'Referans Model' = 'Referans Model';
 
-      if (marineData && marineData.current && typeof marineData.current.wave_height === 'number') {
+      const hasValidMarineData = Boolean(
+        marineData && 
+        marineData.current && 
+        typeof marineData.current.wave_height === 'number'
+      );
+
+      if (hasValidMarineData) {
         waveHeight = Math.round(marineData.current.wave_height * 10) / 10;
         wavePeriod = Math.round(marineData.current.wave_period || 4);
         if (typeof marineData.current.wave_direction === 'number') {
@@ -350,7 +379,7 @@ export async function fetchLiveMarineAndWeather(
         const estimatedHeight = Math.max(0.1, Math.min(2.8, Math.round((windSpeed * 0.035) * 10) / 10));
         waveHeight = estimatedHeight;
         wavePeriod = Math.max(3, Math.min(8, Math.round(3 + (windSpeed * 0.1))));
-        waveSource = 'Kıyı Rüzgâr Tahmini';
+        waveSource = 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil';
       }
 
       const waterTemp = fallbackBaseline.waterTemp;
@@ -358,7 +387,7 @@ export async function fetchLiveMarineAndWeather(
       const currentEstimate = estimateCurrentFromWind(windDirectionDeg, windSpeed);
       const moon = calculateAstronomicalMoonPhase(new Date());
 
-      const safetyAssessment = evaluatePracticalSafety(windSpeed, waveHeight, wavePeriod, rainChance, false);
+      const safetyAssessment = evaluatePracticalSafety(windSpeed, waveHeight, wavePeriod, rainChance, false, hasValidMarineData);
       const safetyStatus: 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal' =
         safetyAssessment.rating === 'Riskli'
           ? 'Riskli - Kıyıdan Kal'
@@ -394,8 +423,9 @@ export async function fetchLiveMarineAndWeather(
           const hWind = weatherData.hourly.wind_speed_10m?.[i] ?? 10;
           const hWindDeg = weatherData.hourly.wind_direction_10m?.[i] ?? 0;
           const hWindDir = degreeToTurkishDirection(hWindDeg);
-          const hWave = marineData?.hourly?.wave_height?.[i] ?? (hWind * 0.035);
-          const hWavePeriod = marineData?.hourly?.wave_period?.[i] ?? 4;
+          const hasHourlyMarine = typeof marineData?.hourly?.wave_height?.[i] === 'number';
+          const hWave = hasHourlyMarine ? marineData.hourly.wave_height[i] : (hWind * 0.035);
+          const hWavePeriod = typeof marineData?.hourly?.wave_period?.[i] === 'number' ? marineData.hourly.wave_period[i] : 4;
 
           // Aktivite Puanı: Teorik Solunar + Sayısal rüzgâr/yağış ağırlıklı model
           let baseScore = 65;
@@ -411,7 +441,14 @@ export async function fetchLiveMarineAndWeather(
 
           const finalScore = Math.min(98, Math.max(35, Math.round(baseScore)));
 
-          const hourSafety = evaluatePracticalSafety(Math.round(hWind), Math.round(hWave * 10) / 10, Math.round(hWavePeriod), hRainProb, false);
+          const hourSafety = evaluatePracticalSafety(
+            Math.round(hWind), 
+            Math.round(hWave * 10) / 10, 
+            Math.round(hWavePeriod), 
+            hRainProb, 
+            false,
+            hasHourlyMarine
+          );
 
           let desc = 'Normal aktivite';
           if (finalScore >= 90) desc = '★ Zirve Beslenme Penceresi';
@@ -460,6 +497,7 @@ export async function fetchLiveMarineAndWeather(
         wavePeriod,
         waveDirection,
         waveSource,
+        hasValidMarineData,
         windSpeed,
         windDirection,
         windDirectionDeg,
@@ -480,7 +518,9 @@ export async function fetchLiveMarineAndWeather(
         fetchTime: nowFormatted,
         lastUpdatedText: `Sayısal Model Tahmini (Model: ${modelTimeFormatted} · Alınma: ${nowFormatted})`,
         hourlyForecast,
-        apiNotice: `Veriler Open-Meteo Forecast & Marine sayısal model çıktısıdır (${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E). Doğrudan kıyı istasyon ölçümü değildir.`
+        apiNotice: hasValidMarineData
+          ? `Veriler Open-Meteo Forecast & Marine sayısal model çıktısıdır (${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E). Doğrudan kıyı istasyon ölçümü değildir.`
+          : `Atmosfer verileri Open-Meteo modelinden alınmıştır. Marine API dalga verisi eksiktir; dalga boyu rüzgârdan türetilmiş tahmindir, gerçek dalga ölçümü değildir.`
       };
 
       memoryCache[cacheKey] = { data: liveResult, timestamp: now };
@@ -509,6 +549,7 @@ export async function fetchLiveMarineAndWeather(
     wavePeriod: fallbackBaseline.wavePeriod,
     waveDirection: fallbackBaseline.windDirection,
     waveSource: 'Referans Model',
+    hasValidMarineData: false,
     windSpeed: fallbackBaseline.windSpeed,
     windDirection: fallbackBaseline.windDirection,
     windDirectionDeg: 180,

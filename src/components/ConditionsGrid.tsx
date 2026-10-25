@@ -100,6 +100,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     wavePeriod: region.conditions.wavePeriod,
     waveDirection: region.conditions.windDirection,
     waveSource: 'Referans Model',
+    hasValidMarineData: false,
     windSpeed: region.conditions.windSpeed,
     windDirection: region.conditions.windDirection,
     windDirectionDeg: 180,
@@ -124,9 +125,16 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
   };
 
   // Geçerli API verisi veya geçerli güncel önbellek olduğunda mevcut güvenlik değerlendirmesini koru.
-  // API verisi alınamadığında veya geçerli önbellek bulunmadığında, sabit bölgesel referans değerlerinden güvenlik sonucu üretme!
+  // Marine API verisi eksikse veya API'ye ulaşılamamışsa kesin "Güvenli/Uygun" sonucu verme!
   const activeSafety = isLiveOrCached
-    ? evaluatePracticalSafety(c.windSpeed, c.waveHeight, c.wavePeriod, c.rainChance, activeLocationType === 'tekne')
+    ? evaluatePracticalSafety(
+        c.windSpeed, 
+        c.waveHeight, 
+        c.wavePeriod, 
+        c.rainChance, 
+        activeLocationType === 'tekne',
+        c.hasValidMarineData
+      )
     : createUnavailableSafetyAssessment();
 
   // Planlama modu seçilmişse, seçilen saatin tahmin verilerini al
@@ -360,7 +368,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                     </div>
                     <div className="text-[11px] text-slate-400">
                       Rüzgâr: <strong className="text-slate-200">{plannedHour.windSpeed} km/sa {plannedHour.windDirection}</strong> · 
-                      Dalga: <strong className="text-slate-200">{plannedHour.waveHeight} m</strong> · 
+                      Dalga: <strong className="text-slate-200">{plannedHour.waveHeight} m</strong> {!c.hasValidMarineData ? <span className="text-amber-400/90 text-[10px] font-normal">(Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil)</span> : null} · 
                       Yağış İhtimali: <strong className="text-slate-200">%{plannedHour.rainProb}</strong>
                     </div>
                   </div>
@@ -555,13 +563,28 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Waves className="w-3.5 h-3.5 text-blue-400" />
               <span>Dalga</span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">{displayWavePeriod}s</span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              {!isLiveOrCached 
+                ? 'Referans' 
+                : !c.hasValidMarineData 
+                ? 'Türetilmiş' 
+                : `${displayWavePeriod}s`}
+            </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
             {displayWaveHeight} <span className="text-xs font-normal text-slate-400">m</span>
           </div>
-          <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title="Açık deniz dalga modelidir; kıyı sığlaşması/kırılması dahil değildir.">
-            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : c.waveSource === 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' ? 'Açık Deniz Modeli' : c.waveSource}
+          <div 
+            className="text-[9.5px] truncate mt-0.5" 
+            title={!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : c.waveSource}
+          >
+            {!isLiveOrCached ? (
+              <span className="text-slate-500">Referans veri, güncel ölçüm değil</span>
+            ) : !c.hasValidMarineData ? (
+              <span className="text-amber-400/90 font-medium">Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil</span>
+            ) : (
+              <span className="text-slate-500">Açık Deniz Modeli (Open-Meteo Marine)</span>
+            )}
           </div>
         </div>
 
