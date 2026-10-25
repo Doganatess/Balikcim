@@ -45,8 +45,11 @@ export const RegionPickerModal: React.FC<RegionPickerModalProps> = ({
           </button>
         </div>
 
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-          {REGIONS.map((region) => {
+        <div className="space-y-2 max-h-[60dvh] overflow-y-auto pr-1">
+          <div className="px-1 text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
+            Samsun – Ordu Kıyı Şeridi (Uygulama Kapsamı)
+          </div>
+          {REGIONS.filter(r => r.isWithinSamsunOrduScope).map((region) => {
             const isSelected = region.id === selectedRegion.id;
             return (
               <button
@@ -62,23 +65,23 @@ export const RegionPickerModal: React.FC<RegionPickerModalProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-cyan-400 border border-slate-700">
+                  <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-cyan-400 border border-slate-700 shrink-0">
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="font-bold text-white text-sm flex items-center gap-2">
                       <span>{region.name}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-normal">
-                        {region.sea}
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-300 font-mono">
+                        {region.city}
                       </span>
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      {region.city} · Su Sıcaklığı: <span className="text-slate-200">{region.conditions.waterTemp}°C</span> · Dalga: <span className="text-slate-200">{region.conditions.waveHeight}m</span>
+                      Referans Su: <span className="text-slate-200">{region.conditions.waterTemp}°C</span> · Dalga: <span className="text-slate-200">{region.conditions.waveHeight}m</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
                     {region.conditions.safetyStatus}
                   </span>
@@ -87,6 +90,52 @@ export const RegionPickerModal: React.FC<RegionPickerModalProps> = ({
               </button>
             );
           })}
+
+          {REGIONS.some(r => !r.isWithinSamsunOrduScope) && (
+            <>
+              <div className="pt-3 px-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Referans Bölgeler (Samsun–Ordu Dışı)</span>
+              </div>
+              {REGIONS.filter(r => !r.isWithinSamsunOrduScope).map((region) => {
+                const isSelected = region.id === selectedRegion.id;
+                return (
+                  <button
+                    key={region.id}
+                    onClick={() => {
+                      onSelectRegion(region);
+                      onClose();
+                    }}
+                    className={`w-full text-left p-3 rounded-2xl border transition flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-slate-900 border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                        : 'bg-[#0f1522] border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-slate-800/80 flex items-center justify-center text-slate-400 border border-slate-700 shrink-0">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-300 text-xs flex items-center gap-2">
+                          <span>{region.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-800 text-amber-300 font-mono">
+                            Kapsam Dışı
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {region.city} · {region.scopeNotice || 'Bölgesel harita dışındadır'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </div>
 
       </div>

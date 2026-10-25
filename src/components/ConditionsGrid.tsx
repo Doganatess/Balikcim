@@ -19,13 +19,19 @@ import {
   Info,
   RefreshCw,
   AlertCircle,
-  CheckCircle2
+  ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
+  Clock,
+  Layers
 } from 'lucide-react';
 import { Region } from '../data/regionsData';
 import { 
   fetchLiveMarineAndWeather, 
   LiveConditionsData,
-  HourlyForecastItem 
+  HourlyForecastItem,
+  evaluatePracticalSafety,
+  degreeToTurkishDirection
 } from '../services/openMeteoService';
 
 interface ConditionsGridProps {
@@ -36,12 +42,12 @@ interface ConditionsGridProps {
 
 export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
   region,
-  onOpenRegionPicker,
-  onOpenHourlyModal
+  onOpenRegionPicker
 }) => {
   const [activeMode, setActiveMode] = useState<'simdi' | 'planla'>('simdi');
   const [activeLocationType, setActiveLocationType] = useState<'kiyi' | 'tekne'>('kiyi');
-  const [showHourlySlider, setShowHourlySlider] = useState(false);
+  const [selectedPlanHourIndex, setSelectedPlanHourIndex] = useState<number>(0);
+  const [showSafetyDetails, setShowSafetyDetails] = useState(false);
   const [liveData, setLiveData] = useState<LiveConditionsData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,6 +72,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
         if (isMounted) {
           setLiveData(data);
           setIsLoading(false);
+          setSelectedPlanHourIndex(0);
         }
       })
       .catch(() => {
@@ -80,6 +87,14 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
   }, [region.id, region.lat, region.lng, region.name]);
 
   // Sayısal model çıktısı varsa kullan, yoksa yerel referans modeli şeffaf olarak göster
+  const fallbackSafety = evaluatePracticalSafety(
+    region.conditions.windSpeed, 
+    region.conditions.waveHeight, 
+    region.conditions.wavePeriod, 
+    region.conditions.rainChance, 
+    activeLocationType === 'tekne'
+  );
+
   const c: LiveConditionsData = liveData || {
     airTemp: region.conditions.airTemp,
     waterTemp: region.conditions.waterTemp,
@@ -95,6 +110,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     windDirectionDeg: 180,
     currentSpeed: region.conditions.currentSpeed,
     currentDirection: region.conditions.currentDirection,
+    currentType: 'Rüzgâr ve Morfolojiden Teorik Hesaplanan Akıntı',
     cloudCoverage: region.conditions.cloudCoverage,
     pressure: region.conditions.pressure,
     pressureTrend: region.conditions.pressureTrend,
@@ -102,31 +118,55 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     moonPhaseIcon: region.conditions.moonPhaseIcon,
     solunarRating: region.conditions.solunarRating as any,
     safetyStatus: region.conditions.safetyStatus,
+    safetyAssessment: fallbackSafety,
     bestWindow: region.conditions.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
     modelTime: '--:--',
     fetchTime: '--:--',
     lastUpdatedText: 'Yedek Bölgesel Model (API Yanıt Vermedi)',
-    hourlyForecast: [
-      { hour: '05:00', score: 78, desc: 'Sabah suyu başlangıcı' },
-      { hour: '06:00', score: 94, desc: '★ Zirve Beslenme Pencerisi' },
-      { hour: '07:00', score: 96, desc: '★ En Yüksek Verim' },
-      { hour: '08:00', score: 88, desc: 'Yüksek aktivite' },
-      { hour: '12:00', score: 55, desc: 'Öğle durgunluğu' },
-      { hour: '17:00', score: 76, desc: 'İkindi hareketi' },
-      { hour: '18:00', score: 91, desc: '★ Akşam Suyu' },
-      { hour: '19:00', score: 93, desc: '★ Zirve Akşam Saati' },
-      { hour: '21:00', score: 82, desc: 'Gece avı' }
-    ],
+    hourlyForecast: [],
     apiNotice: 'Canlı model verisi bekleniyor...'
   };
+
+  // Dinamik olarak tekne/kıyı tercihine göre güvenlik değerlendirmesini güncelle
+  const activeSafety = liveData
+    ? evaluatePracticalSafety(c.windSpeed, c.waveHeight, c.wavePeriod, c.rainChance, activeLocationType === 'tekne')
+    : fallbackSafety;
+
+  // Planlama modu seçilmişse, seçilen saatin tahmin verilerini al
+  const plannedHour: HourlyForecastItem | undefined =
+    c.hourlyForecast && c.hourlyForecast.length > 0
+      ? c.hourlyForecast[selectedPlanHourIndex] || c.hourlyForecast[0]
+      : undefined;
+
+  // Şimdi veya Planla modundaki aktif gösterge değerleri
+  const displayAirTemp = activeMode === 'planla' && plannedHour?.temp !== undefined ? plannedHour.temp : c.airTemp;
+  const displayRainChance = activeMode === 'planla' && plannedHour?.rainProb !== undefined ? plannedHour.rainProb : c.rainChance;
+  const displayWindSpeed = activeMode === 'planla' && plannedHour?.windSpeed !== undefined ? plannedHour.windSpeed : c.windSpeed;
+  const displayWindDir = activeMode === 'planla' && plannedHour?.windDirection ? plannedHour.windDirection : c.windDirection;
+  const displayWaveHeight = activeMode === 'planla' && plannedHour?.waveHeight !== undefined ? plannedHour.waveHeight : c.waveHeight;
+  const displayWavePeriod = activeMode === 'planla' && plannedHour?.wavePeriod !== undefined ? plannedHour.wavePeriod : c.wavePeriod;
 
   return (
     <div id="kosullar" className="w-full max-w-4xl mx-auto px-4 sm:px-6">
       
-      {/* Top Toggle Bar (Directly matching mobile UX) */}
+      {/* Kapsam Dışı Bölge Uyarısı */}
+      {!region.isWithinSamsunOrduScope && (
+        <div className="mb-2.5 p-2.5 rounded-2xl bg-amber-950/80 border border-amber-600/70 text-xs text-amber-200 flex items-start gap-2 animate-in fade-in">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="leading-snug">
+            <strong>Bölge Kapsam Dışı:</strong> {region.name} Samsun–Ordu kıyı analiz sınırları dışındadır.
+            <div className="text-[11px] text-amber-300/80 mt-0.5">
+              Harita, kıyı bandı eşiği ve 30 kayıtlı mera yalnızca Samsun ve Ordu kıyılarına özeldir.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Toggle Bar: Şimdi / Planla & Kıyı / Tekne & Bölge Seçimi */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mb-2.5">
-        {/* Şimdi / Planla Pill Toggle */}
+        
+        {/* Şimdi / Planla Sekmeleri */}
         <div className="flex p-1 rounded-2xl bg-[#0f172a] border border-slate-800">
           <button
             onClick={() => setActiveMode('simdi')}
@@ -137,7 +177,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>Şimdi</span>
+            <span>Şimdi (Mevcut)</span>
           </button>
           <button
             onClick={() => setActiveMode('planla')}
@@ -148,11 +188,11 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>Planla</span>
+            <span>Planla (Saatlik)</span>
           </button>
         </div>
 
-        {/* Secondary Toggles: Kıyı / Tekne & Location Pill */}
+        {/* Kıyı / Tekne & Bölge Seçimi */}
         <div className="flex items-center gap-2">
           {/* Kıyı / Tekne */}
           <div className="flex p-1 rounded-2xl bg-[#0f172a] border border-slate-800">
@@ -180,7 +220,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             </button>
           </div>
 
-          {/* Region Pill */}
+          {/* Bölge Butonu */}
           <button
             onClick={onOpenRegionPicker}
             className="flex-1 sm:flex-initial flex items-center justify-between gap-1.5 px-3.5 py-2 rounded-2xl bg-[#0f172a] border border-slate-800 text-xs sm:text-sm font-medium text-slate-200 hover:border-cyan-500/50 transition"
@@ -192,7 +232,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
         </div>
       </div>
 
-      {/* Gerçek Veri Durumu Bildirim Çubuğu (Şeffaflık) */}
+      {/* Veri Kaynağı ve Güncelleme Şeffaflık Çubuğu */}
       <div className="mb-2.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-[10.5px]">
         <div className="flex items-center gap-1.5">
           {isLoading ? (
@@ -208,6 +248,8 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           <span className="font-medium text-slate-300">
             {isLoading 
               ? 'Open-Meteo sayısal tahmin modelleri sorgulanıyor...' 
+              : activeMode === 'planla' && plannedHour
+              ? `Planlanan Saat: ${plannedHour.hour} (${c.lastUpdatedText})`
               : c.lastUpdatedText}
           </span>
         </div>
@@ -217,72 +259,207 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
         </div>
       </div>
 
-      {/* "En iyi av saati" Star Banner */}
-      <div 
-        onClick={() => setShowHourlySlider(!showHourlySlider)}
-        className="w-full mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#171a18] via-[#1a1c1d] to-[#171a18] border border-amber-950/40 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition group"
-      >
-        <div className="flex items-center gap-2">
-          <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-          <span className="text-xs sm:text-sm font-bold text-amber-400">En iyi av saati</span>
-          <span className="text-xs text-slate-300 hidden sm:inline">· Bugün {c.bestWindow}</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-            c.safetyStatus === 'Güvenli' 
-              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
-              : c.safetyStatus === 'Orta Dalgalı'
-              ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
-              : 'bg-red-950/80 text-red-300 border border-red-800/60'
-          }`}>
-            {c.safetyStatus}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-slate-300 group-hover:text-amber-300 transition">
-          <span>12 Saatlik Tahmin</span>
-          <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showHourlySlider ? 'rotate-90' : ''}`} />
-        </div>
-      </div>
-
-      {/* Saatlik Tahmin Genişletilmiş Paneli (Open-Meteo Hourly verisinden üretilir) */}
-      {showHourlySlider && (
-        <div className="mb-4 p-4 rounded-2xl bg-[#0f172a] border border-slate-800 animate-in fade-in duration-200 space-y-2.5">
-          <div className="flex items-center justify-between flex-wrap gap-1">
-            <div className="text-xs font-semibold text-slate-200">
-              12 Saatlik Kıyı Aktivite Pencereleri ({region.name})
-            </div>
-            <div className="text-[10px] text-cyan-400 font-mono">
-              Open-Meteo Saatlik Sayısal Model
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
-            {c.hourlyForecast.map((h, i) => (
-              <div 
-                key={i}
-                className={`p-2 rounded-xl text-center border transition ${
-                  h.score >= 90 
-                    ? 'bg-amber-950/30 border-amber-500/50 text-amber-300' 
-                    : h.score >= 75 
-                    ? 'bg-cyan-950/20 border-cyan-500/30 text-cyan-300'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
-                }`}
-              >
-                <div className="text-[10px] font-mono text-slate-400">{h.hour}</div>
-                <div className="text-sm font-extrabold my-0.5">{h.score}</div>
-                {typeof h.temp === 'number' && (
-                  <div className="text-[10px] text-slate-300 font-mono">{Math.round(h.temp)}°C</div>
-                )}
-                {typeof h.windSpeed === 'number' && (
-                  <div className="text-[9px] text-slate-400 font-mono">{h.windSpeed}k/s</div>
-                )}
-                <div className="text-[8.5px] truncate mt-0.5 text-slate-400">
-                  {h.score >= 90 ? '★ Zirve' : h.score >= 75 ? 'Aktif' : 'Normal'}
-                </div>
+      {/* PLANLA MODU: Saatlik Karşılaştırma ve Zaman Çizelgesi */}
+      {activeMode === 'planla' && (
+        <div className="mb-3.5 p-3.5 sm:p-4 rounded-2xl bg-[#0a111e] border border-cyan-500/40 shadow-xl space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between flex-wrap gap-1.5 border-b border-slate-800 pb-2">
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-cyan-400" />
+                <span>Gelecek Saatler Av Planlama & Karşılaştırma</span>
               </div>
-            ))}
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Bir saate dokunarak o saatteki rüzgâr, dalga, yağış ve güvenlik durumunu inceleyin.
+              </div>
+            </div>
+
+            <div className="text-[10.5px] font-mono text-cyan-300 bg-cyan-950/80 px-2.5 py-1 rounded-full border border-cyan-800/80">
+              {c.hourlyForecast.length > 0 ? `${c.hourlyForecast.length} Saatlik Projeksiyon` : 'Tahmin Yok'}
+            </div>
           </div>
 
-          <div className="text-[9.5px] text-slate-500 italic pt-1 border-t border-slate-800/60 leading-normal">
-            * Sıcaklık, rüzgâr ve yağış değerleri Open-Meteo sayısal tahmin modelinden alınmaktadır; av skorları ise saat dilimi ve solunar döngüsüyle ağırlıklandırılmış teorik kural modelidir. Biyokütle veya canlı balık tespiti değildir.
+          {c.hourlyForecast.length === 0 ? (
+            <div className="py-6 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl p-4 border border-slate-800">
+              <AlertCircle className="w-6 h-6 text-amber-400 mx-auto mb-1.5" />
+              <div className="font-bold text-slate-200">Tahmin verisi yok</div>
+              <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
+                Canlı Open-Meteo API bağlantısı kurulamadığında sahte gelecek saat tahminleri üretilmez. Çevrimdışı referans değerleri kullanılmaktadır.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Yatay Kaydırılabilir Saatlik Zaman Çizelgesi */}
+              <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                {c.hourlyForecast.map((item, idx) => {
+                  const isSelected = selectedPlanHourIndex === idx;
+                  const isPeak = item.score !== null && item.score >= 90;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedPlanHourIndex(idx)}
+                      className={`min-w-[82px] p-2.5 rounded-2xl text-center border transition shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-cyan-950/90 border-cyan-400 ring-2 ring-cyan-500/30'
+                          : 'bg-[#111927] border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="text-[11px] font-mono font-bold text-slate-300">
+                        {item.hour}
+                      </div>
+
+                      {/* Aktivite Skoru */}
+                      <div className="my-1">
+                        {item.score !== null ? (
+                          <div className={`text-base font-black ${
+                            isPeak ? 'text-amber-400' : item.score >= 75 ? 'text-cyan-300' : 'text-slate-400'
+                          }`}>
+                            %{item.score}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-500">Veri Yok</div>
+                        )}
+                      </div>
+
+                      {/* Sıcaklık & Rüzgar */}
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        {item.temp !== undefined ? `${item.temp}°C` : '--'}
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-mono">
+                        {item.windSpeed !== undefined ? `${item.windSpeed}k/s` : '--'}
+                      </div>
+
+                      {/* Güvenlik Rozeti */}
+                      <div className="mt-1">
+                        <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-semibold ${
+                          item.safetyRating === 'Riskli'
+                            ? 'bg-red-950 text-red-300 border border-red-800'
+                            : item.safetyRating === 'Dikkat'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                            : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        }`}>
+                          {item.safetyRating}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Seçili Plan Saati Özeti */}
+              {plannedHour && (
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                      <span>Saat {plannedHour.hour} İçin Model Tahmini</span>
+                      <span className="text-[10px] text-slate-400 font-normal italic">({plannedHour.desc})</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Rüzgâr: <strong className="text-slate-200">{plannedHour.windSpeed} km/sa {plannedHour.windDirection}</strong> · 
+                      Dalga: <strong className="text-slate-200">{plannedHour.waveHeight} m</strong> · 
+                      Yağış İhtimali: <strong className="text-slate-200">%{plannedHour.rainProb}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10.5px] px-2.5 py-1 rounded-full font-bold ${
+                      plannedHour.safetyRating === 'Riskli'
+                        ? 'bg-red-950 text-red-300 border border-red-800'
+                        : plannedHour.safetyRating === 'Dikkat'
+                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    }`}>
+                      {plannedHour.safetyRating} Koşul
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-[9.5px] text-slate-500 italic leading-snug">
+                * Aktivite puanı Solunar döngüsü, rüzgâr ve sıcaklık toleransına dayalı teorik hidro-meteorolojik kural modelidir. Kesin balık tutma veya biyokütle garantisi değildir.
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ŞİMDİ MODU: "En İyi Av Saati" ve Güvenlik Durumu Çubuğu */}
+      {activeMode === 'simdi' && (
+        <div 
+          onClick={() => setShowSafetyDetails(!showSafetyDetails)}
+          className="w-full mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#171a18] via-[#1a1c1d] to-[#171a18] border border-amber-950/40 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition group"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-amber-400">En iyi av saati</span>
+            <span className="text-xs text-slate-300 hidden sm:inline">· Bugün {c.bestWindow}</span>
+            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+              activeSafety.rating === 'Riskli'
+                ? 'bg-red-950/90 text-red-300 border border-red-800'
+                : activeSafety.rating === 'Dikkat'
+                ? 'bg-amber-950/90 text-amber-300 border border-amber-800'
+                : 'bg-emerald-950/90 text-emerald-300 border border-emerald-800'
+            }`}>
+              {activeSafety.badgeTitle}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-slate-300 group-hover:text-amber-300 transition shrink-0">
+            <span>Saha Güvenlik Raporu</span>
+            <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showSafetyDetails ? 'rotate-90' : ''}`} />
+          </div>
+        </div>
+      )}
+
+      {/* Avlanma Koşulları ve Saha Güvenliği Değerlendirme Paneli */}
+      {(showSafetyDetails || activeMode === 'planla') && (
+        <div className="mb-3.5 p-4 rounded-2xl bg-[#0d1624] border border-slate-800 shadow-xl space-y-2.5 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs sm:text-sm font-bold text-white">Avlanma Koşulları & Saha Güvenliği</span>
+            </div>
+            <span className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${
+              activeSafety.rating === 'Riskli'
+                ? 'bg-red-950 text-red-300 border border-red-800'
+                : activeSafety.rating === 'Dikkat'
+                ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+            }`}>
+              {activeSafety.badgeTitle}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed font-medium">
+            {activeSafety.summary}
+          </p>
+
+          {/* 4 Ana Faktör Durumu */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+              <strong className="text-cyan-400">Rüzgâr Durumu:</strong> {activeSafety.factors.windStatus}
+            </div>
+            <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+              <strong className="text-blue-400">Dalga Durumu:</strong> {activeSafety.factors.waveStatus}
+            </div>
+            <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+              <strong className="text-indigo-400">Yağış Durumu:</strong> {activeSafety.factors.rainStatus}
+            </div>
+            <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+              <strong className="text-purple-400">Akıntı (Tahmin):</strong> {activeSafety.factors.currentStatus}
+            </div>
+          </div>
+
+          {/* Eksik Veriler ve Güvenlik Uyarıları */}
+          <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1 text-[10px] text-slate-400">
+            <div className="font-semibold text-slate-300">Eksik Veri & Sınırlandırmalar:</div>
+            <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+              {activeSafety.dataSourceNotes.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+            <div className="pt-1 text-amber-400/90 font-medium border-t border-slate-800/60">
+              ⚠ Uyarı: Kıyıdan avlanmanın güvenliği kesin olarak garanti edilemez. Falez kenarları, mendirek kayganlığı ve ani fırtına değişimleri sahada kontrol edilmelidir.
+            </div>
           </div>
         </div>
       )}
@@ -297,13 +474,15 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Thermometer className="w-3.5 h-3.5 text-amber-500" />
               <span>Hava</span>
             </div>
-            <span className="text-[9px] font-mono text-cyan-400">Model 2m</span>
+            <span className="text-[9px] font-mono text-cyan-400">
+              {activeMode === 'planla' ? 'Tahmin' : 'Model 2m'}
+            </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
-            {c.airTemp}°C
+            {displayAirTemp}°C
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Open-Meteo NWP
+            Sayısal Hava Tahmini
           </div>
         </div>
 
@@ -331,13 +510,15 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <CloudRain className="w-3.5 h-3.5 text-blue-400" />
               <span>Yağış</span>
             </div>
-            <span className="text-[9px] font-mono text-cyan-400">Model</span>
+            <span className="text-[9px] font-mono text-cyan-400">
+              {activeMode === 'planla' ? 'Olasılık' : 'Model'}
+            </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
-            %{c.rainChance}
+            %{displayRainChance}
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            {c.precipitationMm > 0 ? `${c.precipitationMm} mm yağış` : 'Yağış beklenmiyor'}
+            {activeMode === 'simdi' && c.precipitationMm > 0 ? `${c.precipitationMm} mm yağış` : 'Sayısal Model Tahmini'}
           </div>
         </div>
 
@@ -348,13 +529,13 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Waves className="w-3.5 h-3.5 text-blue-400" />
               <span>Dalga</span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">{c.wavePeriod}s</span>
+            <span className="text-[10px] text-slate-500 font-mono">{displayWavePeriod}s</span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
-            {c.waveHeight} <span className="text-xs font-normal text-slate-400">m</span>
+            {displayWaveHeight} <span className="text-xs font-normal text-slate-400">m</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title="Açık deniz dalga modelidir; kıyı sığlaşması/kırılması dahil değildir.">
-            {c.waveSource === 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' ? 'Açık Deniz (Marine)' : c.waveSource}
+            {c.waveSource === 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' ? 'Açık Deniz Modeli' : c.waveSource}
           </div>
         </div>
 
@@ -365,10 +546,10 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Wind className="w-3.5 h-3.5 text-cyan-400" />
               <span>Rüzgar</span>
             </div>
-            <span className="text-[11px] font-bold text-slate-300 font-mono">{c.windDirection}</span>
+            <span className="text-[11px] font-bold text-slate-300 font-mono">{displayWindDir}</span>
           </div>
           <div className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-            {c.windSpeed} <span className="text-xs font-normal text-slate-400">km/s</span>
+            {displayWindSpeed} <span className="text-xs font-normal text-slate-400">km/s</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
             Open-Meteo 10m Modeli
@@ -387,8 +568,8 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           <div className="text-base sm:text-lg font-extrabold text-white tracking-tight">
             {c.currentSpeed} <span className="text-xs font-normal text-slate-400">m/s</span>
           </div>
-          <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Kıyı Sürüklenme Tahmini
+          <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title="Rüzgâr ve morfolojiden teorik türetilmiştir; doğrudan sensör ölçümü değildir.">
+            Teorik Hesaplanan Akıntı
           </div>
         </div>
 
@@ -405,7 +586,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             %{c.cloudCoverage}
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Open-Meteo Bulutluluk
+            Sayısal Bulutluluk
           </div>
         </div>
 
@@ -426,7 +607,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           </div>
         </div>
 
-        {/* 9. Ay */}
+        {/* 9. Ay Fazı */}
         <div className="p-3 sm:p-3.5 rounded-2xl bg-[#111927] border border-slate-800/80 hover:border-slate-700 transition">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
             <div className="flex items-center gap-1.5">
@@ -447,9 +628,9 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
       </div>
 
       {/* Şeffaflık Alt Notu */}
-      <div className="mt-2.5 flex items-center justify-between text-[9.5px] text-slate-500 px-1">
+      <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[9.5px] text-slate-500 px-1">
         <span>Meteoroloji & Dalga: Open-Meteo Sayısal Tahmin Modelleri (NWP)</span>
-        <span className="font-mono text-cyan-500/80">Kıyı Şamandıra Ölçümü Değildir</span>
+        <span className="font-mono text-cyan-500/80">Kıyı Şamandıra Ölçümü Değildir · Akıntı Teorik Tahmindir</span>
       </div>
     </div>
   );
