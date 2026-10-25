@@ -113,7 +113,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     moonPhase: region.conditions.moonPhase,
     moonPhaseIcon: region.conditions.moonPhaseIcon,
     solunarRating: region.conditions.solunarRating as any,
-    safetyStatus: region.conditions.safetyStatus,
+    safetyStatus: 'Belirsiz — veri eksik',
     safetyAssessment: createUnavailableSafetyAssessment(),
     bestWindow: region.conditions.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
@@ -390,7 +390,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               )}
 
               <div className="text-[9.5px] text-slate-500 italic leading-snug">
-                * Aktivite puanı Solunar döngüsü, rüzgâr ve sıcaklık toleransına dayalı teorik hidro-meteorolojik kural modelidir. Kesin balık tutma veya biyokütle garantisi değildir.
+                * Saatlik aktivite puanı Solunar döngüsü, rüzgâr ve sıcaklık toleransına dayalı teorik bir balık beslenme tahminidir; bir güvenlik değerlendirmesi değildir. Puan yüksek olsa dahi güvenli avlanma koşullarını garanti etmez; güvenlik durumu rüzgâr ve dalga verilerinden bağımsız kontrol edilmelidir.
               </div>
             </>
           )}

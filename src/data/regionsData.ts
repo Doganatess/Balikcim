@@ -14,7 +14,7 @@ export interface MarineCondition {
   moonPhase: string;
   moonPhaseIcon: string;
   solunarRating: string;
-  safetyStatus: 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal';
+  safetyStatus: 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal' | 'Belirsiz — veri eksik';
   bestWindow: string;
 }
 

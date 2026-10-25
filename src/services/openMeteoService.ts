@@ -7,13 +7,15 @@
  * 3. Su sıcaklığı -> NASA GIBS & Copernicus L4 bölgesel referansı (Kıyıda canlı istasyon yoktur)
  * 4. Akıntı -> Rüzgâr yönü ve Coriolis sapmasından teorik hesaplanan akıntı tahmini (Doğrudan ölçüm değildir)
  * 5. Ay fazı -> Matematiksel astronomik algoritma
- * 6. Av aktivite puanı -> Kural tabanlı hidro-meteorolojik teorik model (Biyokütle veya av başarısı garantisi değildir)
+ * 6. Av aktivite puanı -> Kural tabanlı hidro-meteorolojik teorik model (Biyokütle veya av başarısı garantisi değildir; bir güvenlik değerlendirmesi değildir)
  */
+
+export type SafetyStatusType = 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal' | 'Belirsiz — veri eksik';
 
 export interface HourlyForecastItem {
   hour: string; // "14:00"
   isoTime: string;
-  score: number | null; // null if API offline or missing
+  score: number | null; // Aktivite göstergesidir; güvenlik değerlendirmesi veya yakalama garantisi değildir!
   desc: string;
   temp?: number;
   rainProb?: number;
@@ -65,7 +67,7 @@ export interface LiveConditionsData {
   moonPhase: string;
   moonPhaseIcon: string;
   solunarRating: 'Çok Yüksek' | 'Yüksek' | 'Orta' | 'Düşük';
-  safetyStatus: 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal';
+  safetyStatus: SafetyStatusType;
   safetyAssessment: PracticalSafetyAssessment;
   bestWindow: string;
   sourceStatus: 'MODEL_OPEN_METEO' | 'ONBELLEK' | 'YEDEK_MODEL';
@@ -388,11 +390,13 @@ export async function fetchLiveMarineAndWeather(
       const moon = calculateAstronomicalMoonPhase(new Date());
 
       const safetyAssessment = evaluatePracticalSafety(windSpeed, waveHeight, wavePeriod, rainChance, false, hasValidMarineData);
-      const safetyStatus: 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıdan Kal' =
+      const safetyStatus: SafetyStatusType =
         safetyAssessment.rating === 'Riskli'
           ? 'Riskli - Kıyıdan Kal'
           : safetyAssessment.rating === 'Dikkat'
           ? 'Orta Dalgalı'
+          : safetyAssessment.rating === 'Belirsiz'
+          ? 'Belirsiz — veri eksik'
           : 'Güvenli';
 
       // 16 Saatlik Gelecek Tahmin Adımları (Planlama için)
@@ -427,7 +431,8 @@ export async function fetchLiveMarineAndWeather(
           const hWave = hasHourlyMarine ? marineData.hourly.wave_height[i] : (hWind * 0.035);
           const hWavePeriod = typeof marineData?.hourly?.wave_period?.[i] === 'number' ? marineData.hourly.wave_period[i] : 4;
 
-          // Aktivite Puanı: Teorik Solunar + Sayısal rüzgâr/yağış ağırlıklı model
+          // Aktivite Puanı: Teorik Solunar + Sayısal rüzgâr/yağış ağırlıklı balık beslenme tahminidir.
+          // DİKKAT: Bu puan bir güvenlik değerlendirmesi değildir; güvenli avlanma garantisi olarak kullanılamaz.
           let baseScore = 65;
           if ((h >= 5 && h <= 8) || (h >= 17 && h <= 20)) {
             baseScore += 22; // Sabah ve Akşam suyu zirvesi
@@ -441,6 +446,7 @@ export async function fetchLiveMarineAndWeather(
 
           const finalScore = Math.min(98, Math.max(35, Math.round(baseScore)));
 
+          // Marine API saatlik dalga verisi eksik olduğunda saatlik güvenlik sonucu kesinlikle 'Belirsiz' kalır
           const hourSafety = evaluatePracticalSafety(
             Math.round(hWind), 
             Math.round(hWave * 10) / 10, 
@@ -450,10 +456,10 @@ export async function fetchLiveMarineAndWeather(
             hasHourlyMarine
           );
 
-          let desc = 'Normal aktivite';
-          if (finalScore >= 90) desc = '★ Zirve Beslenme Penceresi';
-          else if (finalScore >= 80) desc = 'Yüksek aktivite';
-          else if (finalScore >= 70) desc = 'Aktif pencere';
+          let desc = 'Normal aktivite (Güvenlikten bağımsızdır)';
+          if (finalScore >= 90) desc = '★ Zirve beslenme penceresi (Güvenlik garantisi değildir)';
+          else if (finalScore >= 80) desc = 'Yüksek aktivite (Güvenlikten bağımsızdır)';
+          else if (finalScore >= 70) desc = 'Aktif pencere (Güvenlik ayrıca kontrol edilmelidir)';
           else if (finalScore < 50) desc = 'Düşük hareket';
 
           hourlyForecast.push({
@@ -562,7 +568,7 @@ export async function fetchLiveMarineAndWeather(
     moonPhase: moon.phaseName,
     moonPhaseIcon: moon.phaseIcon,
     solunarRating: moon.solunarRating,
-    safetyStatus: 'Orta Dalgalı',
+    safetyStatus: 'Belirsiz — veri eksik',
     safetyAssessment: unavailableSafety,
     bestWindow: fallbackBaseline.bestWindow,
     sourceStatus: 'YEDEK_MODEL',

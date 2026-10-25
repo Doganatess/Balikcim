@@ -82,7 +82,15 @@ export const RegionPickerModal: React.FC<RegionPickerModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
+                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+                    region.conditions.safetyStatus === 'Riskli - Kıyıdan Kal'
+                      ? 'text-red-400 bg-red-950/40 border-red-800/40'
+                      : region.conditions.safetyStatus === 'Orta Dalgalı'
+                      ? 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                      : region.conditions.safetyStatus === 'Belirsiz — veri eksik'
+                      ? 'text-slate-400 bg-slate-800/60 border-slate-700/60'
+                      : 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                  }`}>
                     {region.conditions.safetyStatus}
                   </span>
                   {isSelected && <Check className="w-4 h-4 text-cyan-400 ml-1" />}
