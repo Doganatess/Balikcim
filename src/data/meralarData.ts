@@ -1,7 +1,8 @@
 import { 
   VERIFIED_COASTAL_SPOTS, 
   VerifiedCoastalSpot, 
-  SpotVerificationStatus,
+  SpotEvidenceLevel,
+  CoastalStructureType,
   CoastalLocationType 
 } from './samsunOrduMapData';
 
@@ -11,15 +12,23 @@ export interface MeraSpot {
   province: 'Samsun' | 'Ordu';
   district: string;
   distanceKm: number;
-  activityScore: number; // 0 - 100 teorik model skoru
+  activityScore?: number; // Kaldırıldı / şeffaflık amacıyla tutulmuyor
   isTrending: boolean;
   type: 'Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı' | 'Kıyı';
+  kiyiYapisi: CoastalStructureType;
+  kanitSeviyesi: SpotEvidenceLevel;
+  kanitSeviyesiBadge: string;
+  kaynak: string;
+  erisimDurumu: string;
+  kisitlarVeRiskler: string;
+  belirsizlikler: string;
+  balikcilikGerekcesi: string;
   popularFish: string[];
   depthDesc: string;
   bottomType: string;
   lat: number;
   lng: number;
-  verificationStatus: SpotVerificationStatus;
+  verificationStatus: SpotEvidenceLevel;
   verificationBadge: string;
   verificationNote: string;
   cautions: string;
@@ -44,23 +53,13 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
 const DEFAULT_CENTER_LAT = 41.132;
 const DEFAULT_CENTER_LNG = 37.283;
 
-// Kıyı türünü basitleştirilmiş arayüz kategorisine dönüştürme
-function mapLocationTypeToMeraType(locType: CoastalLocationType): 'Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı' | 'Kıyı' {
-  if (locType.includes('Mendirek') || locType.includes('Liman')) return 'Liman';
-  if (locType.includes('Kayalık')) return 'Kayalık';
-  if (locType.includes('Kumsal') || locType.includes('Plaj')) return 'Kumsal';
-  if (locType.includes('Dere') || locType.includes('Nehir')) return 'Dere Ağzı';
+// Kıyı yapısını arayüz kategorisine dönüştürme
+function mapStructureToDisplayType(kiyiYapisi: CoastalStructureType): 'Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı' | 'Kıyı' {
+  if (kiyiYapisi === 'mendirek' || kiyiYapisi === 'limanici') return 'Liman';
+  if (kiyiYapisi === 'kayalik_burun') return 'Kayalık';
+  if (kiyiYapisi === 'kumsal') return 'Kumsal';
+  if (kiyiYapisi === 'dere_agzi') return 'Dere Ağzı';
   return 'Kıyı';
-}
-
-// Kıyı yapısına göre teorik aktivite skoru hesaplayıcı
-function calculateStructureActivityScore(spot: VerifiedCoastalSpot): number {
-  if (spot.verificationStatus === 'GENIS_HAT_TEYITSIZ') return 78;
-  if (spot.locationType.includes('Mendirek')) return 92;
-  if (spot.locationType.includes('Kayalık')) return 89;
-  if (spot.locationType.includes('Dere')) return 86;
-  if (spot.locationType.includes('Kumsal')) return 83;
-  return 85;
 }
 
 /**
@@ -68,24 +67,31 @@ function calculateStructureActivityScore(spot: VerifiedCoastalSpot): number {
  */
 export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
   const distanceKm = calculateDistanceKm(DEFAULT_CENTER_LAT, DEFAULT_CENTER_LNG, spot.lat, spot.lng);
-  const isTrending = spot.verificationStatus === 'FIZIKI_YAPI_TEYITLI' || spot.id.includes('yason') || spot.id.includes('camlik');
+  const isTrending = spot.kanitSeviyesi === 'DOGRULANDI';
 
   return {
     id: spot.id,
     name: spot.name,
-    province: spot.city,
-    district: spot.district,
+    province: spot.il,
+    district: spot.ilce,
     distanceKm,
-    activityScore: calculateStructureActivityScore(spot),
     isTrending,
-    type: mapLocationTypeToMeraType(spot.locationType),
-    popularFish: spot.commonTargetSpecies,
-    depthDesc: spot.depthStatus, // 'Doğrulanmış batimetri ölçümü bulunmuyor'
+    type: mapStructureToDisplayType(spot.kiyiYapisi),
+    kiyiYapisi: spot.kiyiYapisi,
+    kanitSeviyesi: spot.kanitSeviyesi,
+    kanitSeviyesiBadge: spot.kanitSeviyesiBadge,
+    kaynak: spot.kaynak,
+    erisimDurumu: spot.erisimDurumu,
+    kisitlarVeRiskler: spot.kisitlarVeRiskler,
+    belirsizlikler: spot.belirsizlikler,
+    balikcilikGerekcesi: spot.balikcilikGerekcesi,
+    popularFish: spot.hedeflenenTurler,
+    depthDesc: spot.derinlikDurumu,
     bottomType: spot.verifiedGeoFeature,
     lat: spot.lat,
     lng: spot.lng,
-    verificationStatus: spot.verificationStatus,
-    verificationBadge: spot.verificationBadge,
+    verificationStatus: spot.kanitSeviyesi,
+    verificationBadge: spot.kanitSeviyesiBadge,
     verificationNote: spot.verificationNote,
     cautions: spot.cautions
   };
@@ -96,7 +102,12 @@ export const MERA_STATS = {
   total: MERALAR_LIST.length, // 30
   samsunCount: MERALAR_LIST.filter(m => m.province === 'Samsun').length, // 13
   orduCount: MERALAR_LIST.filter(m => m.province === 'Ordu').length, // 17
-  fizikiYapiTeyitliCount: MERALAR_LIST.filter(m => m.verificationStatus === 'FIZIKI_YAPI_TEYITLI').length, // 15
-  cografiReferansCount: MERALAR_LIST.filter(m => m.verificationStatus === 'COGRAFI_REFERANS_NOKTASI').length, // 14
-  teyitsizHatCount: MERALAR_LIST.filter(m => m.verificationStatus === 'GENIS_HAT_TEYITSIZ').length // 1
+  dogrulandiCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length, // 15
+  adayCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length, // 11
+  yetersizVeriCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'YETERSIZ_VERI').length, // 2
+  kisitliRiskliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length, // 2
+  // Geriye dönük uyumluluk alanları
+  fizikiYapiTeyitliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length,
+  cografiReferansCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length,
+  teyitsizHatCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'YETERSIZ_VERI' || m.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length
 };

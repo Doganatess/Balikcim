@@ -116,7 +116,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   // Mera filtering states
   const [cityFilter, setCityFilter] = useState<'Tümü' | 'Samsun' | 'Ordu'>('Tümü');
   const [typeFilter, setTypeFilter] = useState<'Tümü' | 'Mendirek/Liman' | 'Kayalık' | 'Kumsal' | 'Dere Ağzı'>('Tümü');
-  const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'FIZIKI_YAPI_TEYITLI' | 'COGRAFI_REFERANS_NOKTASI' | 'GENIS_HAT_TEYITSIZ'>('Tümü');
+  const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'DOGRULANDI' | 'ADAY' | 'YETERSIZ_VERI' | 'ERISIM_KISITLI_VEYA_RISKLI'>('Tümü');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   // Currently selected point (defaults to Ünye Liman Mendireği)
@@ -134,13 +134,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   // Filtered spots based on user selection
   const filteredSpots = useMemo(() => {
     return VERIFIED_COASTAL_SPOTS.filter(spot => {
-      if (cityFilter !== 'Tümü' && spot.city !== cityFilter) return false;
-      if (verificationFilter !== 'Tümü' && spot.verificationStatus !== verificationFilter) return false;
+      if (cityFilter !== 'Tümü' && spot.il !== cityFilter && spot.city !== cityFilter) return false;
+      if (verificationFilter !== 'Tümü' && spot.kanitSeviyesi !== verificationFilter) return false;
       if (typeFilter !== 'Tümü') {
-        if (typeFilter === 'Mendirek/Liman' && !spot.locationType.includes('Mendirek') && !spot.locationType.includes('Liman')) return false;
-        if (typeFilter === 'Kayalık' && !spot.locationType.includes('Kayalık')) return false;
-        if (typeFilter === 'Kumsal' && !spot.locationType.includes('Kumsal') && !spot.locationType.includes('Plaj')) return false;
-        if (typeFilter === 'Dere Ağzı' && !spot.locationType.includes('Dere') && !spot.locationType.includes('Nehir')) return false;
+        if (typeFilter === 'Mendirek/Liman' && spot.kiyiYapisi !== 'mendirek' && spot.kiyiYapisi !== 'limanici') return false;
+        if (typeFilter === 'Kayalık' && spot.kiyiYapisi !== 'kayalik_burun') return false;
+        if (typeFilter === 'Kumsal' && spot.kiyiYapisi !== 'kumsal') return false;
+        if (typeFilter === 'Dere Ağzı' && spot.kiyiYapisi !== 'dere_agzi') return false;
       }
       return true;
     });
@@ -375,19 +375,27 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
     spotsGroup.clearLayers();
 
     filteredSpots.forEach((spot) => {
-      const isLiman = spot.locationType.includes('Mendirek') || spot.locationType.includes('Liman');
-      const isKaya = spot.locationType.includes('Kayalık');
-      const isUnverified = spot.verificationStatus === 'GENIS_HAT_TEYITSIZ';
+      const isRestricted = spot.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI';
+      const isDogrulandi = spot.kanitSeviyesi === 'DOGRULANDI';
+      const isAday = spot.kanitSeviyesi === 'ADAY';
       
-      const iconColor = isUnverified 
-        ? '#eab308' 
-        : isLiman 
-        ? '#06b6d4' 
-        : isKaya 
-        ? '#f59e0b' 
-        : '#10b981';
+      const iconColor = isRestricted
+        ? '#ef4444'
+        : isDogrulandi
+        ? '#06b6d4'
+        : isAday
+        ? '#10b981'
+        : '#f59e0b';
 
-      const iconEmoji = isLiman ? '⚓' : isKaya ? '🪨' : spot.locationType.includes('Dere') ? '🌊' : '🏖️';
+      const iconEmoji = spot.kiyiYapisi === 'mendirek' 
+        ? '⚓' 
+        : spot.kiyiYapisi === 'limanici'
+        ? '🛥️'
+        : spot.kiyiYapisi === 'kayalik_burun' 
+        ? '🪨' 
+        : spot.kiyiYapisi === 'dere_agzi' 
+        ? '🌊' 
+        : '🏖️';
 
       // Pixel-perfect centered Leaflet divIcon: iconAnchor matches exactly half of iconSize
       const spotIcon = L.divIcon({
@@ -425,7 +433,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       });
 
       marker.bindPopup(`
-        <div style="font-size: 12px; line-height: 1.45; font-family: system-ui, sans-serif;">
+        <div style="font-size: 12px; line-height: 1.45; font-family: system-ui, sans-serif; min-width: 190px;">
           <div style="font-weight: 700; color: #0284c7;">${spot.name}</div>
           <div style="color: #64748b; font-size: 11px;">${spot.city} (${spot.district})</div>
           <div style="margin-top: 3px; font-weight: 600; color: ${iconColor}; font-size: 11px;">
@@ -433,6 +441,9 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
           <div style="font-size: 10px; color: #334155; margin-top: 2px;">
             ${spot.locationType}
+          </div>
+          <div style="font-size: 10px; color: #475569; margin-top: 2px;">
+            Ref: ${spot.kaynak}
           </div>
           <div style="font-size: 10px; color: #64748b; font-family: monospace; margin-top: 2px;">
             ${spot.lat.toFixed(4)}°N, ${spot.lng.toFixed(4)}°E
@@ -891,7 +902,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-slate-400 w-16">Doğrulama:</span>
+                <span className="text-[10px] text-slate-400 w-16">Kanıt Durumu:</span>
                 <button
                   onClick={() => setVerificationFilter('Tümü')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
@@ -901,28 +912,36 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   Tümü
                 </button>
                 <button
-                  onClick={() => setVerificationFilter('FIZIKI_YAPI_TEYITLI')}
+                  onClick={() => setVerificationFilter('DOGRULANDI')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                    verificationFilter === 'FIZIKI_YAPI_TEYITLI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                    verificationFilter === 'DOGRULANDI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  ⚓ Fiziki Yapı Teyitli
+                  🛡️ Doğrulandı
                 </button>
                 <button
-                  onClick={() => setVerificationFilter('COGRAFI_REFERANS_NOKTASI')}
+                  onClick={() => setVerificationFilter('ADAY')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                    verificationFilter === 'COGRAFI_REFERANS_NOKTASI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                    verificationFilter === 'ADAY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  📍 Coğrafi Referans
+                  🔍 Aday
                 </button>
                 <button
-                  onClick={() => setVerificationFilter('GENIS_HAT_TEYITSIZ')}
+                  onClick={() => setVerificationFilter('YETERSIZ_VERI')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                    verificationFilter === 'GENIS_HAT_TEYITSIZ' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
+                    verificationFilter === 'YETERSIZ_VERI' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  ⚠️ Avlak Teyitsiz (1)
+                  ⚠️ Yetersiz Veri
+                </button>
+                <button
+                  onClick={() => setVerificationFilter('ERISIM_KISITLI_VEYA_RISKLI')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                    verificationFilter === 'ERISIM_KISITLI_VEYA_RISKLI' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  ⛔ Kısıtlı / Riskli
                 </button>
               </div>
             </div>
@@ -1238,7 +1257,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-slate-400 w-16">Doğrulama:</span>
+              <span className="text-[10px] text-slate-400 w-16">Kanıt Durumu:</span>
               <button
                 onClick={() => setVerificationFilter('Tümü')}
                 className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
@@ -1248,28 +1267,36 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 Tümü
               </button>
               <button
-                onClick={() => setVerificationFilter('FIZIKI_YAPI_TEYITLI')}
+                onClick={() => setVerificationFilter('DOGRULANDI')}
                 className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  verificationFilter === 'FIZIKI_YAPI_TEYITLI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                  verificationFilter === 'DOGRULANDI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                ⚓ Fiziki Yapı Teyitli
+                🛡️ Doğrulandı
               </button>
               <button
-                onClick={() => setVerificationFilter('COGRAFI_REFERANS_NOKTASI')}
+                onClick={() => setVerificationFilter('ADAY')}
                 className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  verificationFilter === 'COGRAFI_REFERANS_NOKTASI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                  verificationFilter === 'ADAY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                📍 Coğrafi Referans
+                🔍 Aday
               </button>
               <button
-                onClick={() => setVerificationFilter('GENIS_HAT_TEYITSIZ')}
+                onClick={() => setVerificationFilter('YETERSIZ_VERI')}
                 className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  verificationFilter === 'GENIS_HAT_TEYITSIZ' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
+                  verificationFilter === 'YETERSIZ_VERI' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                ⚠️ Avlak Teyitsiz (1)
+                ⚠️ Yetersiz Veri
+              </button>
+              <button
+                onClick={() => setVerificationFilter('ERISIM_KISITLI_VEYA_RISKLI')}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  verificationFilter === 'ERISIM_KISITLI_VEYA_RISKLI' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                ⛔ Kısıtlı / Riskli
               </button>
             </div>
           </div>
@@ -1374,10 +1401,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
                 {selectedSpot ? (
                   <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                    selectedSpot.verificationStatus === 'FIZIKI_YAPI_TEYITLI'
+                    selectedSpot.kanitSeviyesi === 'DOGRULANDI'
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                      : selectedSpot.verificationStatus === 'COGRAFI_REFERANS_NOKTASI'
+                      : selectedSpot.kanitSeviyesi === 'ADAY'
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : selectedSpot.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI'
+                      ? 'bg-red-500/20 text-red-300 border border-red-500/40'
                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                   }`}>
                     {selectedSpot.verificationBadge}
