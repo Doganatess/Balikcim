@@ -286,8 +286,34 @@ export const MeralarPreview: React.FC<MeralarPreviewProps> = ({ region, onSelect
                         </span>
                       </div>
 
-                      <div className="text-[10px] text-slate-400 italic">
-                        <strong>Coğrafi Kaynak:</strong> {spot.kaynak}
+                      <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 space-y-1 text-[10px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Coğrafi Doğrulama (OSM):</span>
+                          <span className={`font-semibold px-1.5 py-0.2 rounded text-[9.5px] ${
+                            spot.cografiDogrulamaDurumu === 'DOGRULANDI'
+                              ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                              : 'bg-amber-950 text-amber-300 border border-amber-800'
+                          }`}>
+                            {spot.cografiDogrulamaDurumu === 'DOGRULANDI' ? '✓ Coğrafi Yapı Teyitli' : '⚠ Geniş Hat / Noktasal Yapı Yok'}
+                          </span>
+                        </div>
+                        <div className="text-slate-300">
+                          {spot.cografiKaynak}
+                          {spot.osmUrl && (
+                            <a
+                              href={spot.osmUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="ml-1.5 text-cyan-400 hover:text-cyan-300 underline font-mono text-[9px]"
+                            >
+                              [OSM Haritada Aç ↗]
+                            </a>
+                          )}
+                        </div>
+                        <div className="text-slate-400 text-[9px]">
+                          {spot.cografiKaynakNotu}
+                        </div>
                       </div>
 
                       <div className="flex justify-between pt-0.5">
@@ -300,9 +326,15 @@ export const MeralarPreview: React.FC<MeralarPreviewProps> = ({ region, onSelect
                         <span className="text-slate-300 text-[10.5px] leading-relaxed block">{spot.balikcilikGerekcesi}</span>
                       </div>
 
-                      <div className="pt-0.5">
-                        <span className="text-slate-400 block mb-0.5">Kıyıdan Yaya Erişimi:</span>
-                        <span className="text-slate-300 text-[10.5px] block">{spot.erisimDurumu}</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5 text-[10px]">
+                        <div className="p-2 rounded bg-slate-950/50 border border-slate-800">
+                          <span className="text-slate-400 block mb-0.5 font-semibold">Kıyıya Fiziksel Erişim:</span>
+                          <span className="text-slate-300 leading-snug block">{spot.fizikselKiyiErisimi}</span>
+                        </div>
+                        <div className="p-2 rounded bg-slate-950/50 border border-slate-800">
+                          <span className="text-slate-400 block mb-0.5 font-semibold">Avlanma İzin / Kısıt:</span>
+                          <span className="text-slate-300 leading-snug block">{spot.avlanmaIzinDurumu}</span>
+                        </div>
                       </div>
 
                       {spot.kisitlarVeRiskler && (
@@ -316,9 +348,14 @@ export const MeralarPreview: React.FC<MeralarPreviewProps> = ({ region, onSelect
                         <span className="font-mono text-amber-400">{spot.depthDesc}</span>
                       </div>
 
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Hedeflenen Türler:</span>
-                        <span className="text-cyan-300 font-medium">{spot.popularFish.join(', ')}</span>
+                      <div className="space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Hedeflenen Türler:</span>
+                          <span className="text-cyan-300 font-medium">{spot.popularFish.join(', ')}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-500 italic">
+                          * {spot.turVerisiKaynagi}
+                        </div>
                       </div>
 
                       {spot.cautions && (

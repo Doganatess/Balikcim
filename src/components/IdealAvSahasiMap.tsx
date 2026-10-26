@@ -17,7 +17,8 @@ import {
   Layers,
   Sliders,
   Check,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { Region } from '../data/regionsData';
 import { FishSpecies, FISH_CATALOG } from '../data/fishData';
@@ -119,15 +120,17 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'DOGRULANDI' | 'ADAY' | 'YETERSIZ_VERI' | 'ERISIM_KISITLI_VEYA_RISKLI'>('Tümü');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
-  // Currently selected point (defaults to Ünye Liman Mendireği)
+  // Currently selected point (defaults to Ünye Liman Mendireği, perfectly synced)
+  const defaultInitialSpot = useMemo(() => {
+    return VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[0];
+  }, []);
+
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
-    lat: 41.1417,
-    lng: 37.3117
+    lat: defaultInitialSpot.lat,
+    lng: defaultInitialSpot.lng
   });
 
-  const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(
-    VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[17]
-  );
+  const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(defaultInitialSpot);
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
@@ -145,6 +148,19 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
       return true;
     });
   }, [cityFilter, typeFilter, verificationFilter]);
+
+  // Dynamic spot counts derived directly from actual data
+  const spotCounts = useMemo(() => {
+    return {
+      total: VERIFIED_COASTAL_SPOTS.length,
+      samsun: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Samsun').length,
+      ordu: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Ordu').length,
+      dogrulandi: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'DOGRULANDI').length,
+      aday: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'ADAY').length,
+      yetersizVeri: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'YETERSIZ_VERI').length,
+      kisitli: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length,
+    };
+  }, []);
 
   // Helper for red target pin icon
   const createPinIcon = useCallback((): L.DivIcon => {
@@ -879,7 +895,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                         : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                     }`}
                   >
-                    {city} {city === 'Samsun' ? '(13)' : city === 'Ordu' ? '(17)' : '(30)'}
+                    {city} ({city === 'Samsun' ? spotCounts.samsun : city === 'Ordu' ? spotCounts.ordu : spotCounts.total})
                   </button>
                 ))}
               </div>
@@ -909,7 +925,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     verificationFilter === 'Tümü' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  Tümü
+                  Tümü ({spotCounts.total})
                 </button>
                 <button
                   onClick={() => setVerificationFilter('DOGRULANDI')}
@@ -917,7 +933,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     verificationFilter === 'DOGRULANDI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  🛡️ Doğrulandı
+                  🛡️ Doğrulandı ({spotCounts.dogrulandi})
                 </button>
                 <button
                   onClick={() => setVerificationFilter('ADAY')}
@@ -925,7 +941,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     verificationFilter === 'ADAY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  🔍 Aday
+                  🔍 Aday ({spotCounts.aday})
                 </button>
                 <button
                   onClick={() => setVerificationFilter('YETERSIZ_VERI')}
@@ -933,7 +949,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     verificationFilter === 'YETERSIZ_VERI' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  ⚠️ Yetersiz Veri
+                  ⚠️ Yetersiz Veri ({spotCounts.yetersizVeri})
                 </button>
                 <button
                   onClick={() => setVerificationFilter('ERISIM_KISITLI_VEYA_RISKLI')}
@@ -941,7 +957,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                     verificationFilter === 'ERISIM_KISITLI_VEYA_RISKLI' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  ⛔ Kısıtlı / Riskli
+                  ⛔ Kısıtlı / Riskli ({spotCounts.kisitli})
                 </button>
               </div>
             </div>
@@ -1234,7 +1250,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {city} {city === 'Samsun' ? '(13)' : city === 'Ordu' ? '(17)' : '(30)'}
+                  {city} ({city === 'Samsun' ? spotCounts.samsun : city === 'Ordu' ? spotCounts.ordu : spotCounts.total})
                 </button>
               ))}
             </div>
@@ -1245,7 +1261,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-semibold transition ${
                     typeFilter === t
                       ? 'bg-cyan-600 text-white'
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -1264,7 +1280,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   verificationFilter === 'Tümü' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                Tümü
+                Tümü ({spotCounts.total})
               </button>
               <button
                 onClick={() => setVerificationFilter('DOGRULANDI')}
@@ -1272,7 +1288,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   verificationFilter === 'DOGRULANDI' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                🛡️ Doğrulandı
+                🛡️ Doğrulandı ({spotCounts.dogrulandi})
               </button>
               <button
                 onClick={() => setVerificationFilter('ADAY')}
@@ -1280,7 +1296,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   verificationFilter === 'ADAY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                🔍 Aday
+                🔍 Aday ({spotCounts.aday})
               </button>
               <button
                 onClick={() => setVerificationFilter('YETERSIZ_VERI')}
@@ -1288,7 +1304,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   verificationFilter === 'YETERSIZ_VERI' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                ⚠️ Yetersiz Veri
+                ⚠️ Yetersiz Veri ({spotCounts.yetersizVeri})
               </button>
               <button
                 onClick={() => setVerificationFilter('ERISIM_KISITLI_VEYA_RISKLI')}
@@ -1296,7 +1312,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   verificationFilter === 'ERISIM_KISITLI_VEYA_RISKLI' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                ⛔ Kısıtlı / Riskli
+                ⛔ Kısıtlı / Riskli ({spotCounts.kisitli})
               </button>
             </div>
           </div>
@@ -1501,6 +1517,48 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
               ))}
             </ul>
           </div>
+
+          {/* Kayıtlı Mera İçin Doğrulanmış OSM Kaynağı & Kıyı Erişim Teyidi */}
+          {selectedSpot && (
+            <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-[10.5px] space-y-1.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                  <span className="text-cyan-400">🗺️</span>
+                  <span>Coğrafi Kaynak & Kıyı Doğrulama</span>
+                </span>
+                {selectedSpot.osmUrl && (
+                  <a
+                    href={selectedSpot.osmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 font-medium underline"
+                  >
+                    <span>OSM Haritada Aç</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-slate-300 text-[10px]">
+                <div>
+                  <span className="text-slate-400 font-semibold">Kaynak: </span>
+                  <span>{selectedSpot.cografiKaynak}</span>
+                  {selectedSpot.osmId && <span className="text-slate-400 font-mono text-[9px] ml-1">({selectedSpot.osmId})</span>}
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold">Kıyı Erişimi: </span>
+                  <span>{selectedSpot.fizikselKiyiErisimi}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold">Avlanma İzni: </span>
+                  <span>{selectedSpot.avlanmaIzinDurumu}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold">Tür Verisi: </span>
+                  <span className="text-slate-400">{selectedSpot.turVerisiKaynagi}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* En Yakın Kayıtlı Mera Bilgisi (Serbest seçim yapıldığında gösterilir) */}
           {!selectedSpot && geoAnalysis.nearestSpot && geoAnalysis.distanceToNearestSpotKm !== null && (

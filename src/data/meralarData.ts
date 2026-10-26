@@ -18,6 +18,14 @@ export interface MeraSpot {
   kiyiYapisi: CoastalStructureType;
   kanitSeviyesi: SpotEvidenceLevel;
   kanitSeviyesiBadge: string;
+  cografiDogrulamaDurumu: 'DOGRULANDI' | 'KISMI';
+  cografiKaynak: string;
+  osmId?: string;
+  osmUrl?: string;
+  cografiKaynakNotu: string;
+  fizikselKiyiErisimi: string;
+  avlanmaIzinDurumu: string;
+  turVerisiKaynagi: string;
   kaynak: string;
   erisimDurumu: string;
   kisitlarVeRiskler: string;
@@ -80,6 +88,14 @@ export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
     kiyiYapisi: spot.kiyiYapisi,
     kanitSeviyesi: spot.kanitSeviyesi,
     kanitSeviyesiBadge: spot.kanitSeviyesiBadge,
+    cografiDogrulamaDurumu: spot.cografiDogrulamaDurumu,
+    cografiKaynak: spot.cografiKaynak,
+    osmId: spot.osmId,
+    osmUrl: spot.osmUrl,
+    cografiKaynakNotu: spot.cografiKaynakNotu,
+    fizikselKiyiErisimi: spot.fizikselKiyiErisimi,
+    avlanmaIzinDurumu: spot.avlanmaIzinDurumu,
+    turVerisiKaynagi: spot.turVerisiKaynagi,
     kaynak: spot.kaynak,
     erisimDurumu: spot.erisimDurumu,
     kisitlarVeRiskler: spot.kisitlarVeRiskler,
@@ -97,15 +113,15 @@ export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
   };
 });
 
-// İstatistik sayaçları (Arayüzde şeffaf gösterim için)
+// İstatistik sayaçları (Arayüzde gerçek veriden dinamik hesaplanır)
 export const MERA_STATS = {
-  total: MERALAR_LIST.length, // 30
-  samsunCount: MERALAR_LIST.filter(m => m.province === 'Samsun').length, // 13
-  orduCount: MERALAR_LIST.filter(m => m.province === 'Ordu').length, // 17
-  dogrulandiCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length, // 15
-  adayCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length, // 11
-  yetersizVeriCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'YETERSIZ_VERI').length, // 2
-  kisitliRiskliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length, // 2
+  total: MERALAR_LIST.length,
+  samsunCount: MERALAR_LIST.filter(m => m.province === 'Samsun').length,
+  orduCount: MERALAR_LIST.filter(m => m.province === 'Ordu').length,
+  dogrulandiCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length,
+  adayCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length,
+  yetersizVeriCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'YETERSIZ_VERI').length,
+  kisitliRiskliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length,
   // Geriye dönük uyumluluk alanları
   fizikiYapiTeyitliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length,
   cografiReferansCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length,
