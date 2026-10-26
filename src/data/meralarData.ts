@@ -18,6 +18,9 @@ export interface MeraSpot {
   kiyiYapisi: CoastalStructureType;
   kanitSeviyesi: SpotEvidenceLevel;
   kanitSeviyesiBadge: string;
+  haritadaAktifMi: boolean;
+  aktifOlmamaGerekcesi?: string;
+  eskiKoordinat?: { lat: number; lng: number };
   cografiDogrulamaDurumu: 'DOGRULANDI' | 'KISMI';
   cografiKaynak: string;
   osmId?: string;
@@ -88,6 +91,9 @@ export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
     kiyiYapisi: spot.kiyiYapisi,
     kanitSeviyesi: spot.kanitSeviyesi,
     kanitSeviyesiBadge: spot.kanitSeviyesiBadge,
+    haritadaAktifMi: spot.haritadaAktifMi,
+    aktifOlmamaGerekcesi: spot.aktifOlmamaGerekcesi,
+    eskiKoordinat: spot.eskiKoordinat,
     cografiDogrulamaDurumu: spot.cografiDogrulamaDurumu,
     cografiKaynak: spot.cografiKaynak,
     osmId: spot.osmId,
@@ -116,6 +122,8 @@ export const MERALAR_LIST: MeraSpot[] = VERIFIED_COASTAL_SPOTS.map((spot) => {
 // İstatistik sayaçları (Arayüzde gerçek veriden dinamik hesaplanır)
 export const MERA_STATS = {
   total: MERALAR_LIST.length,
+  activeCount: MERALAR_LIST.filter(m => m.haritadaAktifMi).length,
+  inactiveCount: MERALAR_LIST.filter(m => !m.haritadaAktifMi).length,
   samsunCount: MERALAR_LIST.filter(m => m.province === 'Samsun').length,
   orduCount: MERALAR_LIST.filter(m => m.province === 'Ordu').length,
   dogrulandiCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length,

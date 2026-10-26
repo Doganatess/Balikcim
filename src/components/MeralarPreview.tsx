@@ -364,6 +364,18 @@ export const MeralarPreview: React.FC<MeralarPreviewProps> = ({ region, onSelect
                         </div>
                       )}
 
+                      {!spot.haritadaAktifMi && (
+                        <div className="p-2 rounded-lg bg-red-950/40 border border-red-800 text-[10px] text-red-300">
+                          ⛔ <strong>Harita İşaretçisi Aktif Değil:</strong> {spot.aktifOlmamaGerekcesi}
+                        </div>
+                      )}
+
+                      {spot.eskiKoordinat && (
+                        <div className="p-1.5 rounded bg-slate-950/60 border border-slate-800 text-[9px] text-slate-400">
+                          🗺️ <strong>Koordinat Denetimi:</strong> Önceki yaklaşık koordinat ({spot.eskiKoordinat.lat.toFixed(4)}°K, {spot.eskiKoordinat.lng.toFixed(4)}°D) karada/açıkta kaldığı için kıyı çizgisine ve nesneye sabitlenmiştir.
+                        </div>
+                      )}
+
                       {/* Haritada Gör ve Konuma Git Butonu */}
                       <button
                         onClick={(e) => {

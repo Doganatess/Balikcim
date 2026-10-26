@@ -134,9 +134,11 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
-  // Filtered spots based on user selection
+  // Filtered spots based on user selection (Only active verified coastal spots are shown as map markers)
   const filteredSpots = useMemo(() => {
     return VERIFIED_COASTAL_SPOTS.filter(spot => {
+      // Karada kalan, derin açık denizde kalan veya erişim yasağı olan noktalar haritada işaretçi olarak gösterilmez!
+      if (!spot.haritadaAktifMi) return false;
       if (cityFilter !== 'Tümü' && spot.il !== cityFilter && spot.city !== cityFilter) return false;
       if (verificationFilter !== 'Tümü' && spot.kanitSeviyesi !== verificationFilter) return false;
       if (typeFilter !== 'Tümü') {
@@ -153,10 +155,12 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const spotCounts = useMemo(() => {
     return {
       total: VERIFIED_COASTAL_SPOTS.length,
-      samsun: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Samsun').length,
-      ordu: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Ordu').length,
-      dogrulandi: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'DOGRULANDI').length,
-      aday: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'ADAY').length,
+      active: VERIFIED_COASTAL_SPOTS.filter(s => s.haritadaAktifMi).length,
+      inactive: VERIFIED_COASTAL_SPOTS.filter(s => !s.haritadaAktifMi).length,
+      samsun: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Samsun' && s.haritadaAktifMi).length,
+      ordu: VERIFIED_COASTAL_SPOTS.filter(s => s.il === 'Ordu' && s.haritadaAktifMi).length,
+      dogrulandi: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'DOGRULANDI' && s.haritadaAktifMi).length,
+      aday: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'ADAY' && s.haritadaAktifMi).length,
       yetersizVeri: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'YETERSIZ_VERI').length,
       kisitli: VERIFIED_COASTAL_SPOTS.filter(s => s.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length,
     };
@@ -1556,6 +1560,16 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
                   <span className="text-slate-400 font-semibold">Tür Verisi: </span>
                   <span className="text-slate-400">{selectedSpot.turVerisiKaynagi}</span>
                 </div>
+                {!selectedSpot.haritadaAktifMi && (
+                  <div className="col-span-1 sm:col-span-2 p-1.5 rounded bg-red-950/60 border border-red-800/80 text-red-300 text-[10px]">
+                    ⛔ <strong>Harita İşaretçisi Aktif Değil:</strong> {selectedSpot.aktifOlmamaGerekcesi}
+                  </div>
+                )}
+                {selectedSpot.eskiKoordinat && (
+                  <div className="col-span-1 sm:col-span-2 p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 text-[9px]">
+                    🗺️ <strong>Eski Yaklaşık Konum:</strong> {selectedSpot.eskiKoordinat.lat.toFixed(4)}°K, {selectedSpot.eskiKoordinat.lng.toFixed(4)}°D (Karada/açıkta kaldığı için kıyı yapısına sabitlenmiştir).
+                  </div>
+                )}
               </div>
             </div>
           )}
