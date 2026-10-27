@@ -1277,27 +1277,16 @@ export const VERIFIED_COASTAL_SPOTS: VerifiedCoastalSpot[] = [
   }
 ];
 
-// GeoJSON dosyası Vite tarafından ham metin olarak içe aktarılır.
-import samsunOrduLandRaw from './samsunOrduLand.geojson?raw';
+import {
+  SAMSUN_ORDU_LAND_GEOJSON,
+  type Position,
+  type LinearRing,
+  type PolygonCoordinates,
+  type LandGeometry,
+  type LandFeatureCollection
+} from './samsunOrduLandData';
 
-type Position = [number, number]; // [longitude, latitude]
-type LinearRing = Position[];
-type PolygonCoordinates = LinearRing[];
-
-type LandGeometry =
-  | { type: 'Polygon'; coordinates: PolygonCoordinates }
-  | { type: 'MultiPolygon'; coordinates: PolygonCoordinates[] };
-
-type LandFeatureCollection = {
-  type: 'FeatureCollection';
-  features: Array<{
-    type: 'Feature';
-    properties?: Record<string, unknown>;
-    geometry: LandGeometry | null;
-  }>;
-};
-
-const LAND_GEOJSON = JSON.parse(samsunOrduLandRaw) as LandFeatureCollection;
+const LAND_GEOJSON = SAMSUN_ORDU_LAND_GEOJSON;
 const COASTAL_BAND_KM = 0.45;
 const CLIP_EDGE_TOLERANCE = 0.001;
 
