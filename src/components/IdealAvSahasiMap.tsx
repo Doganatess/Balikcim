@@ -120,17 +120,13 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   const [verificationFilter, setVerificationFilter] = useState<'Tümü' | 'DOGRULANDI' | 'ADAY' | 'YETERSIZ_VERI' | 'ERISIM_KISITLI_VEYA_RISKLI'>('Tümü');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
-  // Currently selected point (defaults to Ünye Liman Mendireği, perfectly synced)
-  const defaultInitialSpot = useMemo(() => {
-    return VERIFIED_COASTAL_SPOTS.find(s => s.id === 'unye-liman-mendirek') || VERIFIED_COASTAL_SPOTS[0];
-  }, []);
-
+  // Başlangıç koordinatı seçili bölge merkezidir; hiçbir hazır/sahte mera seçili gelmez
   const [selectedCoord, setSelectedCoord] = useState<{ lat: number; lng: number }>({
-    lat: defaultInitialSpot.lat,
-    lng: defaultInitialSpot.lng
+    lat: region.lat,
+    lng: region.lng
   });
 
-  const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(defaultInitialSpot);
+  const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(null);
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
@@ -1730,7 +1726,7 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           <div className="text-xs text-slate-300 leading-relaxed space-y-1.5">
             {activeQuickTab === 'mera' && (
               <>
-                <p><strong>Kapsam:</strong> 19 Mayıs, Atakum, İlkadım, Canik, Tekkeköy, Çarşamba, Terme, Ünye, Fatsa, Perşembe, Altınordu ve Gülyalı kıyıları ({VERIFIED_COASTAL_SPOTS.length} teyitli nokta)</p>
+                <p><strong>Kapsam:</strong> Samsun & Ordu Karadeniz kıyı şeridi ({VERIFIED_COASTAL_SPOTS.length > 0 ? `${VERIFIED_COASTAL_SPOTS.length} kayıtlı nokta` : '0 kayıtlı mera; haritaya dokunarak analiz koordinatı seçebilirsiniz'})</p>
                 <p><strong>Zemin Profili:</strong> Ünye ve Perşembe kıyılarında doğal falezler, kayalık burunlar ve derin koylar; Çarşamba ve Terme'de sığ kumluk kumsallar ve nehir ağızları; Gümüşhane, Çarşamba ve Terme bölgelerinde liman girişleri ve mendirekler dikkat çekmektedir.</p>
                 <p className="text-[10px] text-slate-500">Not: Kıyı yapısı sahada fırtına ve debiye bağlı olarak değişebilir; sahaya inmeden önce yerinde inceleme yapınız.</p>
               </>

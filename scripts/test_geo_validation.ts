@@ -1,86 +1,101 @@
-import { VERIFIED_COASTAL_SPOTS, validateCoastalSpots, classifyPointGeography, isLandPoint, distanceToLandBoundaryKm } from '../src/data/samsunOrduMapData.js';
+import { 
+  VERIFIED_COASTAL_SPOTS, 
+  validateCoastalSpots, 
+  classifyPointGeography, 
+  isLandPoint, 
+  distanceToLandBoundaryKm 
+} from '../src/data/samsunOrduMapData.js';
 import { MERALAR_LIST, MERA_STATS } from '../src/data/meralarData.js';
+import { fetchLiveMarineAndWeather } from '../src/services/openMeteoService.js';
 
 console.log('=====================================================');
-console.log('   BALIKCIM COĞRAFİ DOĞRULAMA & BÜTÜNLÜK TESTİ       ');
+console.log('   BALIKCIM SIFIR MERA & HAVA/DENİZ VERİ DENETİMİ    ');
 console.log('=====================================================');
 
-// 1. Toplam Sayı Kontrolü
-console.log(`\n1. Toplam Nokta Sayısı: ${VERIFIED_COASTAL_SPOTS.length} (MeralarList: ${MERALAR_LIST.length})`);
-if (VERIFIED_COASTAL_SPOTS.length !== 30 || MERALAR_LIST.length !== 30) {
-  console.error('❌ HATA: Nokta sayısı 30 değil!');
+// 1. Hazır Mera Sıfırlama Kontrolü
+console.log(`\n1. Hazır Mera Sayısı Kontrolü:`);
+console.log(`- VERIFIED_COASTAL_SPOTS: ${VERIFIED_COASTAL_SPOTS.length}`);
+console.log(`- MERALAR_LIST: ${MERALAR_LIST.length}`);
+console.log(`- MERA_STATS.total: ${MERA_STATS.total}`);
+
+if (VERIFIED_COASTAL_SPOTS.length !== 0 || MERALAR_LIST.length !== 0 || MERA_STATS.total !== 0) {
+  console.error('❌ HATA: Hazır meralar tamamen kaldırılmamış! Sayı 0 olmalı.');
   process.exit(1);
 } else {
-  console.log('✅ Toplam nokta sayısı tam 30.');
+  console.log('✅ KABUL KRİTERİ GEÇTİ: Uygulamada hiçbir hazır mera kalmamıştır (Mera sayısı: 0).');
 }
 
-// 2. MapData ile MeralarData Eşleşme Kontrolü
-console.log('\n2. Veri Kaynakları Eşleşme Kontrolü:');
-let mismatchCount = 0;
-for (const s of VERIFIED_COASTAL_SPOTS) {
-  const m = MERALAR_LIST.find((item: any) => item.id === s.id);
-  if (!m) {
-    console.error(`❌ ${s.id} MERALAR_LIST içinde bulunamadı!`);
-    mismatchCount++;
-  } else if (m.lat !== s.lat || m.lng !== s.lng) {
-    console.error(`❌ Koordinat uyumsuzluğu (${s.id}): map=(${s.lat},${s.lng}) vs meralar=(${m.lat},${m.lng})`);
-    mismatchCount++;
-  } else if (m.haritadaAktifMi !== s.haritadaAktifMi) {
-    console.error(`❌ haritadaAktifMi uyumsuzluğu (${s.id})`);
-    mismatchCount++;
-  }
-}
-if (mismatchCount === 0) {
-  console.log('✅ Tüm 30 nokta VERIFIED_COASTAL_SPOTS ve MERALAR_LIST arasında birebir eşleşiyor.');
-}
-
-// 3. Otomatik Doğrulama Fonksiyonu Kontrolü
-console.log('\n3. validateCoastalSpots() Doğrulaması:');
+// 2. Otomatik Doğrulama Bütünlüğü
+console.log('\n2. validateCoastalSpots() Kontrolü:');
 const validation = validateCoastalSpots();
 console.log(`- Toplam: ${validation.totalSpots}`);
 console.log(`- Aktif Harita İşaretçisi: ${validation.activeSpotsCount}`);
-console.log(`- Gösterimden Ayrılmış / Pasif: ${validation.inactiveSpotsCount}`);
-if (validation.isValid) {
-  console.log('✅ validateCoastalSpots(): TÜM KONTROLLER GEÇTİ.');
+console.log(`- Hatalar: ${validation.errors.length}`);
+if (validation.isValid && validation.totalSpots === 0 && validation.activeSpotsCount === 0) {
+  console.log('✅ validateCoastalSpots(): 0 hazır nokta ile temiz doğrulama başarılı.');
 } else {
-  console.error('❌ validateCoastalSpots() Hatalar:', validation.errors);
+  console.error('❌ validateCoastalSpots() Hata:', validation.errors);
   process.exit(1);
 }
 
-// 4. Her Noktanın Gerçek Kıyı Çizgisi Mesafesi ve Kara/Deniz Durumu
-console.log('\n4. Aktif Noktaların Kıyı Geometrisi Analizi:');
-let inlandFailures = 0;
-let farSeaFailures = 0;
+// 3. Serbest Koordinat Coğrafi Sınıflandırma Kontrolü
+console.log('\n3. Serbest Nokta Coğrafi Sınıflandırma Testi:');
+// Ünye sahil koordinatı testi
+const testCoastPoint = classifyPointGeography(41.1385, 37.3195);
+console.log(`- Ünye Sahil Testi (41.1385, 37.3195): Bölge="${testCoastPoint.zone}", Mesafe=${testCoastPoint.distanceToCoastKm} km`);
+if (testCoastPoint.isWithinBounds) {
+  console.log('✅ Serbest koordinat analizi 0 mera varken hatasız çalışıyor.');
+} else {
+  console.error('❌ Serbest koordinat analizi başarısız!');
+  process.exit(1);
+}
 
-for (const spot of VERIFIED_COASTAL_SPOTS) {
-  const geo = classifyPointGeography(spot.lat, spot.lng);
-  const boundary = distanceToLandBoundaryKm(spot.lat, spot.lng);
-  const distM = Math.round(boundary.distanceKm * 1000);
+// 4. Canlı Open-Meteo Weather ve Marine API Entegrasyon Testi
+console.log('\n4. Canlı Open-Meteo Weather & Marine API Çağrı Testi:');
+async function runApiTest() {
+  try {
+    const liveData = await fetchLiveMarineAndWeather(41.1385, 37.3195, 'Ünye Test', {
+      airTemp: 14,
+      waterTemp: 19.3,
+      windSpeed: 10,
+      windDirection: 'G',
+      waveHeight: 0.3,
+      wavePeriod: 4,
+      cloudCoverage: 50,
+      pressure: 1013,
+      rainChance: 10,
+      bestWindow: '06:00 - 09:00'
+    });
 
-  console.log(`[${spot.id}] ${spot.name}:`);
-  console.log(`   Koordinat: (${spot.lat.toFixed(4)}, ${spot.lng.toFixed(4)}) | Aktif: ${spot.haritadaAktifMi}`);
-  console.log(`   Kıyıya Mesafe: ${distM} m | Bölge: ${geo.zone} | Kanıt: ${spot.kanitSeviyesi}`);
+    console.log(`- Hava Sıcaklığı: ${liveData.airTemp} °C (Model 2m)`);
+    console.log(`- Deniz Suyu Sıcaklığı: ${liveData.waterTemp !== null ? liveData.waterTemp + ' °C' : 'Veri Yok'} (${liveData.waterTempNote})`);
+    console.log(`- Rüzgâr Hızı: ${liveData.windSpeed} km/sa | Hamle: ${liveData.windGusts ?? '--'} km/sa | Yön: ${liveData.windDirection}`);
+    console.log(`- Dalga Yüksekliği: ${liveData.waveHeight} m | Periyot: ${liveData.wavePeriod} s | Kaynak: ${liveData.waveSource}`);
+    console.log(`- Rüzgâr Dalgası: ${liveData.windWaveHeight ?? '--'} m | Solugan (Swell): ${liveData.swellWaveHeight ?? '--'} m`);
+    console.log(`- Akıntı: ${liveData.currentSpeed !== null ? liveData.currentSpeed + ' km/sa (' + liveData.currentSpeedMs + ' m/s)' : 'Veri Yok'} | Yön: ${liveData.currentDirection ?? '--'}`);
+    console.log(`- Basınç: ${liveData.pressure} hPa (MSL)`);
+    console.log(`- Yağış: %${liveData.rainChance} ihtimal · ${liveData.precipitationMm} mm miktar`);
+    console.log(`- Ay Fazı: ${liveData.moonPhaseIcon} ${liveData.moonPhase} | Solunar Puanı: ${liveData.solunarRating}`);
+    console.log(`- Saatlik Tahmin Adet: ${liveData.hourlyForecast.length}`);
+    console.log(`- Zaman Referansı: ${liveData.lastUpdatedText}`);
 
-  if (spot.haritadaAktifMi) {
-    // Aktif noktalar kıyı çizgisi yakınında olmalıdır (<= 450m)
-    if (distM > 450) {
-      console.error(`   ❌ HATA: Aktif nokta kıyıdan çok uzakta (${distM}m)!`);
-      farSeaFailures++;
+    // Doğrulama Kontrolleri
+    if (typeof liveData.airTemp !== 'number' || isNaN(liveData.airTemp)) {
+      throw new Error('Hava sıcaklığı sayısal değil!');
     }
-    // Aktif nokta karasal alanın derinliklerinde olmamalıdır
-    if (geo.zoneType === 'kara') {
-      console.error(`   ❌ HATA: Aktif nokta kara poligonu içinde!`);
-      inlandFailures++;
+    if (typeof liveData.waveHeight !== 'number' || isNaN(liveData.waveHeight)) {
+      throw new Error('Dalga yüksekliği sayısal değil!');
     }
-  } else {
-    console.log(`   ℹ️ [GÖSTERİMDEN AYRILDI]: ${spot.aktifOlmamaGerekcesi}`);
+    if (liveData.windSpeed <= 0 && liveData.sourceStatus === 'MODEL_OPEN_METEO') {
+      // Wind speed could be 0 if calm, but should be finite
+      if (!Number.isFinite(liveData.windSpeed)) throw new Error('Rüzgâr hızı geçersiz!');
+    }
+
+    console.log('\n✅ TÜM HAVA VE DENİZ ENTEGRASYON KONTROLLERİ BAŞARIYLA TAMAMLANDI.');
+  } catch (err) {
+    console.error('❌ API Test Hatası:', err);
+    process.exit(1);
   }
 }
 
-if (inlandFailures === 0 && farSeaFailures === 0) {
-  console.log('\n✅ TÜM AKTİF MERALAR GERÇEK KIYI ÇİZGİSİ VE YAPILARINDA DOĞRULANDI.');
-  console.log('   Hiçbir sahte, karada veya açık denizde kalan nokta haritada aktif olarak gösterilmiyor.');
-} else {
-  console.error(`\n❌ BAŞARISIZ: ${inlandFailures} karada nokta, ${farSeaFailures} açıkta nokta bulundu!`);
-  process.exit(1);
-}
+runApiTest();

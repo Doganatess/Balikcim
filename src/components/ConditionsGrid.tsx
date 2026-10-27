@@ -92,21 +92,26 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
 
   const c: LiveConditionsData = liveData || {
     airTemp: region.conditions.airTemp,
-    waterTemp: region.conditions.waterTemp,
-    waterTempNote: 'Referans veri, güncel ölçüm değil (Mevsimsel kıyı modeli referansı)',
+    waterTemp: null,
+    waterTempNote: 'Referans veri, güncel ölçüm değil',
     rainChance: region.conditions.rainChance,
     precipitationMm: 0,
     waveHeight: region.conditions.waveHeight,
     wavePeriod: region.conditions.wavePeriod,
+    windWaveHeight: null,
+    swellWaveHeight: null,
     waveDirection: region.conditions.windDirection,
+    waveDirectionDeg: 180,
     waveSource: 'Referans Model',
     hasValidMarineData: false,
     windSpeed: region.conditions.windSpeed,
+    windGusts: null,
     windDirection: region.conditions.windDirection,
     windDirectionDeg: 180,
-    currentSpeed: region.conditions.currentSpeed,
-    currentDirection: region.conditions.currentDirection,
-    currentType: 'Rüzgâr ve Morfolojiden Teorik Hesaplanan Akıntı',
+    currentSpeed: null,
+    currentSpeedMs: null,
+    currentDirection: null,
+    currentType: 'Ölçüm/Model verisi yok',
     cloudCoverage: region.conditions.cloudCoverage,
     pressure: region.conditions.pressure,
     pressureTrend: region.conditions.pressureTrend,
@@ -345,7 +350,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
                         {item.temp !== undefined ? `${item.temp}°C` : '--'}
                       </div>
                       <div className="text-[9px] text-slate-400 font-mono">
-                        {item.windSpeed !== undefined ? `${item.windSpeed}k/s` : '--'}
+                        {item.windSpeed !== undefined ? `${item.windSpeed} km/sa` : '--'}
                       </div>
 
                       {/* Güvenlik Rozeti */}
@@ -531,14 +536,14 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <span>Deniz</span>
             </div>
             <span className="text-[9px] font-mono text-cyan-400">
-              {!isLiveOrCached ? 'Referans' : 'Model L4'}
+              {c.waterTemp !== null ? 'Copernicus L4' : 'Veri Yok'}
             </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
-            {c.waterTemp}°C
+            {c.waterTemp !== null ? `${c.waterTemp}°C` : '--'}
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title={c.waterTempNote}>
-            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'NASA / Copernicus'}
+            {c.waterTemp !== null ? 'Open-Meteo Marine SST' : 'Veri alınamadı'}
           </div>
         </div>
 
@@ -550,7 +555,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <span>Yağış</span>
             </div>
             <span className="text-[9px] font-mono text-cyan-400">
-              {!isLiveOrCached ? 'Referans' : activeMode === 'planla' ? 'Olasılık' : 'Model'}
+              {!isLiveOrCached ? 'Referans' : 'Olasılık'}
             </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
@@ -559,9 +564,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
             {!isLiveOrCached 
               ? 'Referans veri, güncel ölçüm değil' 
-              : activeMode === 'simdi' && c.precipitationMm > 0 
-              ? `${c.precipitationMm} mm yağış` 
-              : 'Sayısal Model Tahmini'}
+              : `Miktar: ${c.precipitationMm} mm`}
           </div>
         </div>
 
@@ -572,12 +575,12 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Waves className="w-3.5 h-3.5 text-blue-400" />
               <span>Dalga</span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">
+            <span className="text-[10px] text-slate-400 font-mono">
               {!isLiveOrCached 
                 ? 'Referans' 
                 : !displayHasValidMarineData 
                 ? 'Türetilmiş' 
-                : `${displayWavePeriod}s`}
+                : `Periyot: ${displayWavePeriod}s`}
             </span>
           </div>
           <div className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
@@ -585,12 +588,20 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
           </div>
           <div 
             className="text-[9.5px] truncate mt-0.5" 
-            title={!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : displayWaveSource}
+            title={
+              c.windWaveHeight !== null || c.swellWaveHeight !== null
+                ? `Rüzgâr Dalgası: ${c.windWaveHeight ?? '--'} m · Solugan (Swell): ${c.swellWaveHeight ?? '--'} m (Açık deniz hidrodinamik modeli; kıyı kırılmaları ve sığlaşma dalga boyunu etkileyebilir)`
+                : displayWaveSource
+            }
           >
             {!isLiveOrCached ? (
               <span className="text-slate-500">Referans veri, güncel ölçüm değil</span>
             ) : !displayHasValidMarineData ? (
               <span className="text-amber-400/90 font-medium">Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil</span>
+            ) : c.windWaveHeight !== null && c.swellWaveHeight !== null ? (
+              <span className="text-slate-400">
+                Rüzgâr: {c.windWaveHeight}m · Solugan: {c.swellWaveHeight}m
+              </span>
             ) : (
               <span className="text-slate-500">Açık Deniz Modeli (Open-Meteo Marine)</span>
             )}
@@ -607,10 +618,10 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             <span className="text-[11px] font-bold text-slate-300 font-mono">{displayWindDir}</span>
           </div>
           <div className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-            {displayWindSpeed} <span className="text-xs font-normal text-slate-400">km/s</span>
+            {displayWindSpeed} <span className="text-xs font-normal text-slate-400">km/sa</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : 'Open-Meteo 10m Modeli'}
+            {!isLiveOrCached ? 'Referans veri, güncel ölçüm değil' : c.windGusts ? `Hamle: ${c.windGusts} km/sa` : 'Open-Meteo 10m Modeli'}
           </div>
         </div>
 
@@ -621,13 +632,22 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
               <Compass className="w-3.5 h-3.5 text-cyan-400" />
               <span>Akıntı</span>
             </div>
-            <span className="text-[11px] font-bold text-slate-300 font-mono">{c.currentDirection}</span>
+            <span className="text-[11px] font-bold text-slate-300 font-mono">{c.currentDirection ?? '--'}</span>
           </div>
           <div className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-            {c.currentSpeed} <span className="text-xs font-normal text-slate-400">m/s</span>
+            {c.currentSpeed !== null ? (
+              <>
+                {c.currentSpeed} <span className="text-xs font-normal text-slate-400">km/sa</span>
+                {c.currentSpeedMs !== null && (
+                  <span className="text-[10px] font-normal text-slate-400 ml-1">({c.currentSpeedMs} m/s)</span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-slate-400 font-normal">Veri Yok</span>
+            )}
           </div>
-          <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title="Rüzgâr ve morfolojiden teorik türetilmiştir; doğrudan sensör ölçümü değildir.">
-            Teorik Hesaplanan Akıntı
+          <div className="text-[9.5px] text-slate-500 truncate mt-0.5" title={c.currentType}>
+            {c.currentType}
           </div>
         </div>
 
@@ -681,7 +701,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             <span className="truncate">{c.moonPhase}</span>
           </div>
           <div className="text-[9.5px] text-slate-500 truncate mt-0.5">
-            Astronomik Hesap
+            Astronomik Faz · Teorik Puan
           </div>
         </div>
 
@@ -690,7 +710,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
       {/* Şeffaflık Alt Notu */}
       <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[9.5px] text-slate-500 px-1">
         <span>Meteoroloji & Dalga: Open-Meteo Sayısal Tahmin Modelleri (NWP)</span>
-        <span className="font-mono text-cyan-500/80">Kıyı Şamandıra Ölçümü Değildir · Akıntı Teorik Tahmindir</span>
+        <span className="font-mono text-cyan-500/80">Açık Deniz Modeli · Kıyı Dalga Ölçüm Şamandırası Değildir</span>
       </div>
     </div>
   );

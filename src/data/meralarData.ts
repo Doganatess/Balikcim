@@ -133,5 +133,39 @@ export const MERA_STATS = {
   // Geriye dönük uyumluluk alanları
   fizikiYapiTeyitliCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'DOGRULANDI').length,
   cografiReferansCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'ADAY').length,
-  teyitsizHatCount: MERALAR_LIST.filter(m => m.kanitSeviyesi === 'YETERSIZ_VERI' || m.kanitSeviyesi === 'ERISIM_KISITLI_VEYA_RISKLI').length
 };
+
+const CUSTOM_MERALAR_KEY = 'balik_custom_meralar';
+
+export function getStoredCustomMeralar(): MeraSpot[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_MERALAR_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveCustomMera(spot: MeraSpot): MeraSpot[] {
+  try {
+    const existing = getStoredCustomMeralar();
+    const updated = [spot, ...existing.filter(s => s.id !== spot.id)];
+    localStorage.setItem(CUSTOM_MERALAR_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    return [];
+  }
+}
+
+export function deleteCustomMera(id: string): MeraSpot[] {
+  try {
+    const existing = getStoredCustomMeralar();
+    const updated = existing.filter(s => s.id !== id);
+    localStorage.setItem(CUSTOM_MERALAR_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    return [];
+  }
+}
+
