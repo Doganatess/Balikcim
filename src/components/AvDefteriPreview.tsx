@@ -26,6 +26,7 @@ import {
   deleteCatchRecord, 
   calculatePersonalCatchStats 
 } from '../data/catchesData';
+import { SCIENTIFIC_FISH_DATABASE } from '../data/scientificFishData';
 
 interface AvDefteriPreviewProps {
   region: Region;
@@ -363,13 +364,27 @@ export const AvDefteriPreview: React.FC<AvDefteriPreviewProps> = ({ region }) =>
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="font-bold text-white text-sm flex items-center gap-2">
-                        <span>{item.species}</span>
-                        <span className="text-xs text-cyan-400 font-semibold">{item.quantity} Adet</span>
-                        {item.weightKg && (
-                          <span className="text-xs text-slate-400">({item.weightKg} kg)</span>
-                        )}
-                      </div>
+                      {(() => {
+                        const sciEntry = Object.values(SCIENTIFIC_FISH_DATABASE).find(
+                          s => s.turkishName.toLowerCase().includes(item.species.toLowerCase()) ||
+                               item.species.toLowerCase().includes(s.turkishName.toLowerCase()) ||
+                               s.id === item.species.toLowerCase()
+                        );
+                        return (
+                          <div className="font-bold text-white text-sm flex items-center gap-2 flex-wrap">
+                            <span>{item.species}</span>
+                            <span className="text-xs text-cyan-400 font-semibold">{item.quantity} Adet</span>
+                            {item.weightKg && (
+                              <span className="text-xs text-slate-400">({item.weightKg} kg)</span>
+                            )}
+                            {sciEntry && (
+                              <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800 font-mono">
+                                Asgari Boy: {sciEntry.legalMinLengthCm} cm (Tebliğ 5/2)
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-cyan-400" />

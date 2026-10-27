@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Fish, ShieldCheck, Clock, Waves, Compass, Sparkles, ChevronRight, AlertCircle } from 'lucide-react';
+import { X, Fish, ShieldCheck, Clock, Waves, Compass, Sparkles, ChevronRight, AlertCircle, ExternalLink } from 'lucide-react';
 import { FishSpecies } from '../data/fishData';
+import { SCIENTIFIC_FISH_DATABASE } from '../data/scientificFishData';
 
 interface FishDetailModalProps {
   fish: FishSpecies | null;
@@ -14,6 +15,8 @@ export const FishDetailModal: React.FC<FishDetailModalProps> = ({
   onSelectOnMap
 }) => {
   if (!fish) return null;
+
+  const scientific = SCIENTIFIC_FISH_DATABASE[fish.id];
 
   return (
     <div 
@@ -47,20 +50,26 @@ export const FishDetailModal: React.FC<FishDetailModalProps> = ({
               </span>
             </div>
             <div className="text-xs text-slate-400 italic mt-0.5 truncate">
-              {fish.latinName}
+              {scientific ? `${scientific.scientificName} · Familya: ${scientific.family}` : fish.latinName}
             </div>
           </div>
         </div>
 
-        {/* Score & Activity Bar */}
+        {/* Scientific Profile & Trophic Level Bar */}
         <div className="p-3.5 rounded-2xl bg-[#131d30] border border-slate-800 mb-5 flex items-center justify-between gap-2">
           <div>
-            <div className="text-[11px] text-slate-400">Katalog Aktivite İndeksi</div>
-            <div className="text-2xl font-black font-mono text-cyan-400">%{fish.currentScore}</div>
-            <div className="text-[9.5px] text-slate-500 mt-0.5 leading-tight">Genel tür rehberi endeksidir; konuma özgü balık tutma garantisi değildir.</div>
+            <div className="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5">
+              <span>🔬 Bilimsel Taksonomi & Trofik Seviye</span>
+            </div>
+            <div className="text-xl font-black font-mono text-cyan-400 mt-0.5">
+              {scientific ? `Trofik Skor: ${scientific.trophicLevel} / 5.0` : `%${fish.currentScore}`}
+            </div>
+            <div className="text-[9.5px] text-slate-400 mt-0.5 leading-tight">
+              {scientific ? `FishBase besin zinciri seviyesidir · ${scientific.blackSeaSeasonality}` : 'Genel rehber göstergesi'}
+            </div>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-            {fish.activityStatus}
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0">
+            {scientific ? 'FishBase Teyitli' : fish.activityStatus}
           </span>
         </div>
 
@@ -130,6 +139,38 @@ export const FishDetailModal: React.FC<FishDetailModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Scientific Literature References */}
+          {scientific && (
+            <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+              <div className="text-[11px] font-bold text-slate-200 flex items-center justify-between">
+                <span>📚 Bilimsel Kaynaklar & Mevzuat Dayanağı</span>
+                <span className="text-[9px] text-cyan-400 font-mono">Tebliğ 5/2 & FishBase</span>
+              </div>
+              <div className="space-y-1.5 text-[10.5px]">
+                {scientific.scientificReferences.map((ref, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 p-1.5 rounded bg-slate-950/70 border border-slate-800/80">
+                    <div className="truncate min-w-0">
+                      <span className="text-slate-300 font-medium">{ref.title}</span>
+                      <span className="text-slate-500 text-[9.5px] block truncate">{ref.authorOrOrg} ({ref.yearOrEdition})</span>
+                    </div>
+                    <a
+                      href={ref.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-cyan-400 hover:text-cyan-300 shrink-0 p-1 text-[10px] font-semibold underline flex items-center gap-0.5"
+                    >
+                      <span>İncele</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[9.5px] text-slate-400 pt-1 border-t border-slate-800/80">
+                Mevsimsel Durum: {scientific.seasonalBansText}
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div className="text-xs text-slate-400 leading-relaxed italic">

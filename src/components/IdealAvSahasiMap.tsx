@@ -32,6 +32,9 @@ import {
   assessPointFishingSuitability,
   PointSuitabilityAssessment
 } from '../data/samsunOrduMapData';
+import { KiyidanAvAnalizi } from './KiyidanAvAnalizi';
+import { fetchLiveMarineAndWeather, LiveConditionsData } from '../services/openMeteoService';
+import { SCIENTIFIC_FISH_DATABASE, evaluateScientificFishingCondition } from '../data/scientificFishData';
 
 interface IdealAvSahasiMapProps {
   region: Region;
@@ -127,6 +130,32 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
   });
 
   const [selectedSpot, setSelectedSpot] = useState<VerifiedCoastalSpot | null>(null);
+  const [mapPointConditions, setMapPointConditions] = useState<LiveConditionsData | null>(null);
+
+  // Seçili koordinat için canlı Open-Meteo hava ve deniz verisini sorgula
+  useEffect(() => {
+    let isMounted = true;
+    fetchLiveMarineAndWeather(selectedCoord.lat, selectedCoord.lng, 'Harita Noktası', {
+      airTemp: region.conditions.airTemp,
+      waterTemp: region.conditions.waterTemp,
+      windSpeed: region.conditions.windSpeed,
+      windDirection: region.conditions.windDirection,
+      waveHeight: region.conditions.waveHeight,
+      wavePeriod: region.conditions.wavePeriod,
+      cloudCoverage: region.conditions.cloudCoverage,
+      pressure: region.conditions.pressure,
+      rainChance: region.conditions.rainChance,
+      bestWindow: region.conditions.bestWindow,
+    })
+      .then((data) => {
+        if (isMounted) setMapPointConditions(data);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCoord.lat, selectedCoord.lng, region]);
 
   const [activeQuickTab, setActiveQuickTab] = useState<'mera' | 'saat' | 'yem' | 'olta' | null>(null);
 
@@ -1586,31 +1615,57 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
 
-        {/* Hedef Tür ve Katalog Aktivite İndeksi Bilgisi */}
-        <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-xl shrink-0">{selectedFish.emoji}</span>
-            <div className="min-w-0">
-              <span className="font-bold text-slate-200 text-xs">
-                {selectedFish.name} — Genel Tür Rehberi:
-              </span>
-              <div className="text-[10px] text-slate-400 leading-snug">
-                {geoAnalysis.zoneType === 'deniz'
-                  ? 'Açık deniz alanı: Kıyı atış menzilinin dışındadır; kıyıdan erişilemez (yalnızca tekne/sırtı avcılığı uygundur).'
-                  : geoAnalysis.zoneType === 'kara'
-                  ? 'Karasal alan seçildi; deniz kıyısı veya olta atış imkânı bulunmamaktadır.'
-                  : geoAnalysis.zoneType === 'kiyi'
-                  ? `Seçilen kıyı bandında ${selectedFish.name} için önerilen av saatleri (${selectedFish.bestHours}) ve yem tercihleri (${selectedFish.bestBaits[0]}) genel bölgesel/biyolojik tavsiyelerdir; konuma özgü doğrulanmış tahmin veya balık yakalama garantisi değildir.`
-                  : 'Yeterli coğrafi veri bulunmadığından bu koordinatta türe özel kıyı tavsiyesi üretilememiştir.'}
+        {/* Hedef Tür ve Bilimsel Koşul Değerlendirmesi */}
+        {(() => {
+          const fishEval = evaluateScientificFishingCondition(
+            selectedFish.id,
+            {
+              airTemp: mapPointConditions?.airTemp ?? region.conditions.airTemp,
+              waterTemp: mapPointConditions?.waterTemp ?? null,
+              windSpeed: mapPointConditions?.windSpeed ?? region.conditions.windSpeed,
+              windDirection: mapPointConditions?.windDirection ?? region.conditions.windDirection,
+              waveHeight: mapPointConditions?.waveHeight ?? region.conditions.waveHeight,
+              precipitationMm: mapPointConditions?.precipitationMm ?? 0,
+            },
+            geoAnalysis.zoneType
+          );
+
+          return (
+            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-xl shrink-0">{selectedFish.emoji}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-200 text-xs">
+                      {selectedFish.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 italic font-mono">
+                      {selectedFish.latinName}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 leading-snug mt-0.5">
+                    {fishEval.scientificJustification}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-right shrink-0">
+                <div className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                  fishEval.badgeTone === 'emerald'
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                    : fishEval.badgeTone === 'amber'
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-500/50'
+                    : 'bg-red-950/80 text-red-300 border-red-500/50'
+                }`}>
+                  {fishEval.rating}
+                </div>
+                <div className="text-[9px] text-slate-500 mt-1 leading-tight font-mono">
+                  FishBase & Tebliğ 5/2 Dayanaklı
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="text-right shrink-0">
-            <div className="text-xs font-mono font-bold text-cyan-400">%{selectedFish.currentScore}</div>
-            <div className="text-[9px] text-slate-500 leading-tight">Katalog Aktivite İndeksi<br/>(Konuma özgü olasılık değildir)</div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Alt Bilgi */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-500 border-t border-slate-800/80">
@@ -1622,6 +1677,15 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Bütünleşik Kıyıdan Av Analizi Paneli (Fiziksel Erişim, Batimetri, Canlı Model ve Bilimsel Tür Analizi) */}
+      <KiyidanAvAnalizi
+        coord={selectedCoord}
+        selectedSpot={selectedSpot}
+        geoAnalysis={geoAnalysis}
+        selectedFish={selectedFish}
+        liveConditions={mapPointConditions}
+      />
 
       <div className="grid grid-cols-4 gap-2 sm:gap-4 mt-4">
         <button
