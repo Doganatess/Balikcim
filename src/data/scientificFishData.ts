@@ -424,7 +424,7 @@ export function evaluateScientificFishingCondition(
     waterTemp: number | null;
     windSpeed: number;
     windDirection: string;
-    waveHeight: number;
+    waveHeight: number | null;
     precipitationMm: number;
   },
   geoZoneType: string = 'kiyi'
@@ -489,15 +489,20 @@ export function evaluateScientificFishingCondition(
   let waveStatus: 'ideal' | 'tolerable' | 'unfavorable' | 'nodata' = 'tolerable';
   let waveReason = '';
 
-  if (current.waveHeight >= waveMinM && current.waveHeight <= waveMaxM) {
-    waveStatus = 'ideal';
-    waveReason = `Dalga boyu ${current.waveHeight}m; kıyıda ${profile.inshoreTriggerConditions.coastalBehavior}`;
-  } else if (current.waveHeight < waveMinM) {
-    waveStatus = 'tolerable';
-    waveReason = `Dalga boyu ${current.waveHeight}m (durgun su); kıyıda çalkantı ve köpük az olduğundan balık temkinli davranabilir.`;
+  if (current.waveHeight !== null && current.waveHeight !== undefined) {
+    if (current.waveHeight >= waveMinM && current.waveHeight <= waveMaxM) {
+      waveStatus = 'ideal';
+      waveReason = `Dalga boyu ${current.waveHeight}m; kıyıda ${profile.inshoreTriggerConditions.coastalBehavior}`;
+    } else if (current.waveHeight < waveMinM) {
+      waveStatus = 'tolerable';
+      waveReason = `Dalga boyu ${current.waveHeight}m (durgun su); kıyıda çalkantı ve köpük az olduğundan balık temkinli davranabilir.`;
+    } else {
+      waveStatus = 'unfavorable';
+      waveReason = `Dalga boyu ${current.waveHeight}m (kuvvetli çalkantı); kıyı atış güvenliği riskli ve dip akıntısı takımı sürükleyebilir.`;
+    }
   } else {
-    waveStatus = 'unfavorable';
-    waveReason = `Dalga boyu ${current.waveHeight}m (kuvvetli çalkantı); kıyı atış güvenliği riskli ve dip akıntısı takımı sürükleyebilir.`;
+    waveStatus = 'nodata';
+    waveReason = 'Açık deniz dalga model verisi bulunamadı; kıyı çalkantı durumu sahada kontrol edilmelidir.';
   }
 
   // Rüzgâr Analizi

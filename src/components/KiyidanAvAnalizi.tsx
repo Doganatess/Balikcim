@@ -368,7 +368,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
                       ? `~${bathymetry.depthMeters} m`
                       : bathymetry?.depthCategory === 'Karasal Alan'
                       ? 'Karasal Alan'
-                      : 'Derinlik verisi bulunamadı'}
+                      : 'Derinlik verisi doğrulanamadı'}
                   </span>
                 </div>
 

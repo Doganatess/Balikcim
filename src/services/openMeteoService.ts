@@ -24,8 +24,8 @@ export interface HourlyForecastItem {
   windGusts?: number;
   windDirection?: string;
   windDirectionDeg?: number;
-  waveHeight?: number;
-  wavePeriod?: number;
+  waveHeight?: number | null;
+  wavePeriod?: number | null;
   windWaveHeight?: number | null;
   swellWaveHeight?: number | null;
   hasMarineWaveData?: boolean;
@@ -56,13 +56,13 @@ export interface LiveConditionsData {
   waterTempNote: string;
   rainChance: number; // % (Sayısal model yağış ihtimali)
   precipitationMm: number; // mm (Sayısal model yağış miktarı)
-  waveHeight: number; // metre (Toplam belirgin dalga boyu Hm0)
-  wavePeriod: number; // saniye (Ortalama dalga periyodu)
+  waveHeight: number | null; // metre (Toplam belirgin dalga boyu Hm0, veri yoksa null)
+  wavePeriod: number | null; // saniye (Ortalama dalga periyodu, veri yoksa null)
   windWaveHeight: number | null; // metre (Rüzgâr dalgası)
   swellWaveHeight: number | null; // metre (Solugan / kabarma dalgası)
   waveDirection: string;
   waveDirectionDeg: number;
-  waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil' | 'Referans Model';
+  waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Marine Dalga Verisi Yok' | 'Referans Model';
   hasValidMarineData: boolean;
   marineGridCoord?: { lat: number; lng: number };
   weatherGridCoord?: { lat: number; lng: number };
@@ -108,8 +108,8 @@ export function degreeToTurkishDirection(deg: number): string {
 // Pratik Avlanma Koşulları ve Saha Güvenliği Değerlendiricisi
 export function evaluatePracticalSafety(
   windSpeed: number,
-  waveHeight: number,
-  wavePeriod: number,
+  waveHeight: number | null,
+  wavePeriod: number | null,
   rainProb: number,
   isBoat: boolean = false,
   hasMarineData: boolean = true
@@ -122,12 +122,12 @@ export function evaluatePracticalSafety(
   // Rüzgâr ve Dalga Değerlendirmesi
   const isHighWind = windSpeed >= 35;
   const isModerateWind = windSpeed >= 22;
-  const isHighWave = waveHeight >= 1.4;
-  const isModerateWave = waveHeight >= 0.8;
-  const isLongPeriodSwell = wavePeriod >= 7 && waveHeight >= 0.7; // Güçlü solugan dalga
+  const isHighWave = waveHeight !== null && waveHeight >= 1.4;
+  const isModerateWave = waveHeight !== null && waveHeight >= 0.8;
+  const isLongPeriodSwell = wavePeriod !== null && waveHeight !== null && wavePeriod >= 7 && waveHeight >= 0.7; // Güçlü solugan dalga
   const isHeavyRain = rainProb >= 65;
 
-  if (isHighWind || isHighWave || (isBoat && (windSpeed >= 28 || waveHeight >= 1.2))) {
+  if (isHighWind || isHighWave || (isBoat && (windSpeed >= 28 || (waveHeight !== null && waveHeight >= 1.2)))) {
     rating = 'Riskli';
     badgeTone = 'red';
     badgeTitle = isBoat ? '⛔ Riskli - Tekneyle Çıkış Tehlikeli' : '⛔ Riskli - Kıyıdan Kalınız';
@@ -147,20 +147,20 @@ export function evaluatePracticalSafety(
     warnings.push('Rüzgâr şiddetlenirse kıyı taşlarında denge kaybına yol açabilir.');
   }
 
-  let waveStatus = hasMarineData
-    ? `Açık deniz dalga tahmini (~${waveHeight} m, periyot: ${wavePeriod}s); kıyı kırılmalarına dikkat.`
-    : `Marine API dalga verisi yok (Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil: ~${waveHeight} m).`;
+  let waveStatus = hasMarineData && waveHeight !== null
+    ? `Açık deniz dalga tahmini (~${waveHeight} m${wavePeriod !== null ? `, periyot: ${wavePeriod}s` : ''}); kıyı kırılmalarına dikkat.`
+    : 'Marine API dalga verisi yok (Model kapsamı dışında veya veri eksik).';
 
-  if (hasMarineData) {
+  if (hasMarineData && waveHeight !== null) {
     if (waveHeight >= 1.4) {
       waveStatus = `Yüksek dalga (~${waveHeight} m); mendirek ve kayalıkları aşabilir.`;
       warnings.push('Taş tahkimat ve mendirek üzerine dalga patlaması riski bulunmaktadır; kıyıdan uzak durunuz.');
     } else if (waveHeight >= 0.8 || isLongPeriodSwell) {
-      waveStatus = `Orta kabarmış deniz (~${waveHeight} m${isLongPeriodSwell ? ', solugan periyot: ' + wavePeriod + 's' : ''}); kaygan taşlara dikkat.`;
+      waveStatus = `Orta kabarmış deniz (~${waveHeight} m${isLongPeriodSwell && wavePeriod !== null ? ', solugan periyot: ' + wavePeriod + 's' : ''}); kaygan taşlara dikkat.`;
       warnings.push('Dalga serpintisi kaygan taşlarda düşme tehlikesi yaratır; su geçirmez tabanlı ayakkabı zorunludur.');
     }
   } else {
-    warnings.push('Marine API dalga ve deniz verisi eksiktir. Belirtilen dalga yüksekliği rüzgârdan türetilmiştir; açık deniz soluganı (swell) ve kıyı kırılması bu tahmine dahil değildir.');
+    warnings.push('Marine API dalga ve deniz verisi eksiktir. Kıyı çalkantısı ve açık deniz dalgası sahada kontrol edilmelidir.');
   }
 
   let rainStatus = `Düşük yağış ihtimali (%${rainProb}).`;
@@ -384,17 +384,19 @@ export async function fetchLiveMarineAndWeather(
         typeof marineData.current.wave_height === 'number'
       );
 
-      let waveHeight: number;
-      let wavePeriod: number;
+      let waveHeight: number | null = null;
+      let wavePeriod: number | null = null;
       let windWaveHeight: number | null = null;
       let swellWaveHeight: number | null = null;
       let waveDirection = windDirection;
       let waveDirectionDeg = windDirectionDeg;
-      let waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil' | 'Referans Model';
+      let waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Marine Dalga Verisi Yok' | 'Referans Model';
 
       if (hasValidMarineData) {
         waveHeight = Math.round(marineData.current.wave_height * 10) / 10;
-        wavePeriod = Math.round((marineData.current.wave_period || 4) * 10) / 10;
+        wavePeriod = typeof marineData.current.wave_period === 'number'
+          ? Math.round(marineData.current.wave_period * 10) / 10
+          : null;
         windWaveHeight = typeof marineData.current.wind_wave_height === 'number'
           ? Math.round(marineData.current.wind_wave_height * 10) / 10
           : null;
@@ -407,10 +409,9 @@ export async function fetchLiveMarineAndWeather(
         }
         waveSource = 'Açık Deniz Dalga Modeli (Open-Meteo Marine)';
       } else {
-        const estimatedHeight = Math.max(0.1, Math.min(2.8, Math.round((windSpeed * 0.035) * 10) / 10));
-        waveHeight = estimatedHeight;
-        wavePeriod = Math.max(3, Math.min(8, Math.round(3 + (windSpeed * 0.1))));
-        waveSource = 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil';
+        waveHeight = null;
+        wavePeriod = null;
+        waveSource = 'Marine Dalga Verisi Yok';
       }
 
       // Deniz Suyu Sıcaklığı (SST) - Open-Meteo Marine Sayısal Model Tahmini
@@ -481,8 +482,8 @@ export async function fetchLiveMarineAndWeather(
           const hWindDir = degreeToTurkishDirection(hWindDeg);
 
           const hasHourlyMarine = typeof marineData?.hourly?.wave_height?.[i] === 'number';
-          const hWave = hasHourlyMarine ? Math.round(marineData.hourly.wave_height[i] * 10) / 10 : Math.round((hWind * 0.035) * 10) / 10;
-          const hWavePeriod = typeof marineData?.hourly?.wave_period?.[i] === 'number' ? Math.round(marineData.hourly.wave_period[i] * 10) / 10 : 4;
+          const hWave = hasHourlyMarine ? Math.round(marineData.hourly.wave_height[i] * 10) / 10 : null;
+          const hWavePeriod = typeof marineData?.hourly?.wave_period?.[i] === 'number' ? Math.round(marineData.hourly.wave_period[i] * 10) / 10 : null;
           const hWindWave = typeof marineData?.hourly?.wind_wave_height?.[i] === 'number' ? Math.round(marineData.hourly.wind_wave_height[i] * 10) / 10 : null;
           const hSwellWave = typeof marineData?.hourly?.swell_wave_height?.[i] === 'number' ? Math.round(marineData.hourly.swell_wave_height[i] * 10) / 10 : null;
 
@@ -497,7 +498,7 @@ export async function fetchLiveMarineAndWeather(
 
           if (hWind >= 5 && hWind <= 18) baseScore += 6;
           if (hRainProb < 20) baseScore += 5;
-          if (hWind > 35 || hWave > 1.6) baseScore -= 35;
+          if (hWind > 35 || (hWave !== null && hWave > 1.6)) baseScore -= 35;
 
           const finalScore = Math.min(98, Math.max(35, Math.round(baseScore)));
 

@@ -43,7 +43,7 @@ export interface BathymetryResult {
   maxDepthMeters?: number | null;
   smoothedDepthMeters?: number | null;
   elementarySurfaces?: number | null;
-  depthCategory: 'Sığ Kıyı (<5m)' | 'Orta Derinlik (5-15m)' | 'Derin Su (>15m)' | 'Karasal Alan' | 'Derinlik verisi bulunamadı';
+  depthCategory: 'Sığ Kıyı (<5m)' | 'Orta Derinlik (5-15m)' | 'Derin Su (>15m)' | 'Karasal Alan' | 'Derinlik verisi doğrulanamadı';
   depthNote: string;
   emodnetReference?: {
     identifier?: string;
@@ -203,6 +203,33 @@ export async function fetchBathymetry(
     }
   } catch (e) {}
 
+  // 1. Koordinat ve girdi geçerlilik kontrolü
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return {
+      latitude: lat,
+      longitude: lng,
+      depthMeters: null,
+      rawAvgElevationMeters: null,
+      depthCategory: 'Derinlik verisi doğrulanamadı',
+      depthNote: 'Geçersiz koordinat (Enlem veya boylam sayısal sınırların dışındadır).',
+      isFromEmodnetRest: false,
+      seabedSubstrate: 'Doğrulanmış Dip Verisi Yok',
+      substrateConfidence: 'Doğrulanamadı (Veri Yok)',
+      substrateNote: 'Geçersiz koordinatta dip yapısı belirlenemez.',
+      isNearshoreSurfZone: false,
+      metadata: {
+        sourceName: 'EMODnet Bathymetry REST API',
+        sourceUrl: 'https://rest.emodnet-bathymetry.eu/',
+        dataType: 'EMODnet Bathymetry REST API',
+        spatialResolution: 'Doğrulanamadı',
+        verticalDatum: 'LAT / MSL',
+        dataDate: 'Geçersiz',
+        verificationStatus: 'DOGRULANAMADI',
+        limitations: ['Koordinat sınır dışıdır.']
+      }
+    };
+  }
+
   // 2. Gerçek EMODnet Bathymetry REST API Sorgusu
   const emodnetRes = await queryEmodnetBathymetry(lat, lng);
 
@@ -215,22 +242,23 @@ export async function fetchBathymetry(
   let maxDepthMeters: number | null = null;
   let smoothedDepthMeters: number | null = null;
   let elementarySurfaces: number | null = null;
-  let depthCategory: BathymetryResult['depthCategory'] = 'Derinlik verisi bulunamadı';
-  let depthNote = 'Derinlik verisi bulunamadı';
+  let depthCategory: BathymetryResult['depthCategory'] = 'Derinlik verisi doğrulanamadı';
+  let depthNote = 'Derinlik verisi doğrulanamadı';
   let isFromEmodnet = false;
   let emodnetRef: BathymetryResult['emodnetReference'] = undefined;
 
   if (isLandZone) {
-    // Karasal bölge: EMODnet pozitif kot dönse bile bu bir kara yüksekliğidir, derinlik değildir.
+    // Bağımsız coğrafi kontrol: Karasal bölge.
+    // EMODnet negatif kot dönse bile karasal alanda derinlik olarak kabul edilmez.
     depthMeters = null;
     depthCategory = 'Karasal Alan';
-    if (emodnetRes.success && typeof emodnetRes.avg === 'number' && emodnetRes.avg > 0) {
+    if (emodnetRes.success && typeof emodnetRes.avg === 'number' && Number.isFinite(emodnetRes.avg)) {
       rawAvgElevationMeters = emodnetRes.avg;
-      depthNote = `Seçilen koordinat karasal alandadır (Arazi kotu: +${rawAvgElevationMeters.toFixed(1)} m MSL). Deniz batimetrisi geçerli değildir.`;
+      depthNote = `Bağımsız coğrafi kontrol: Nokta karasal alandadır (Arazi kotu: +${rawAvgElevationMeters.toFixed(1)} m MSL). Deniz batimetrisi geçerli değildir.`;
     } else {
-      depthNote = 'Seçilen koordinat deniz alanı dışındadır. Karasal alanda deniz derinliği hesaplanmaz.';
+      depthNote = 'Bağımsız coğrafi kontrol: Seçilen koordinat deniz alanı dışındadır. Karasal alanda deniz derinliği hesaplanmaz.';
     }
-  } else if (emodnetRes.success && typeof emodnetRes.avg === 'number') {
+  } else if (emodnetRes.success && typeof emodnetRes.avg === 'number' && Number.isFinite(emodnetRes.avg)) {
     isFromEmodnet = true;
     rawAvgElevationMeters = emodnetRes.avg;
     elementarySurfaces = emodnetRes.elementarySurfaces ?? null;
@@ -241,48 +269,59 @@ export async function fetchBathymetry(
       elementarySurfaces: emodnetRes.elementarySurfaces
     };
 
+    const hasValidDtmRef = Boolean(emodnetRes.referenceIdentifier || emodnetRes.referenceType === 'DTM');
+
     if (emodnetRes.avg < 0) {
       // EMODnet Bathymetry'de LAT/MSL altı su derinliği negatif kot ile ifade edilir.
-      // Düşey referans belgelenmiş deniz seviyesi altı derinliği gerektirdiğinden pozitife çevrilir.
-      const positiveDepth = Math.abs(emodnetRes.avg);
-      depthMeters = Math.round(positiveDepth * 10) / 10;
-
-      if (typeof emodnetRes.min === 'number') {
-        minDepthMeters = Math.round(Math.abs(emodnetRes.min) * 10) / 10;
-      }
-      if (typeof emodnetRes.max === 'number') {
-        maxDepthMeters = Math.round(Math.abs(emodnetRes.max) * 10) / 10;
-      }
-      if (typeof emodnetRes.smoothed === 'number') {
-        smoothedDepthMeters = Math.round(Math.abs(emodnetRes.smoothed) * 10) / 10;
-      }
-
-      if (depthMeters < 5) {
-        depthCategory = 'Sığ Kıyı (<5m)';
-        depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Sayısal model verisidir; sığ kıyı bandında ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.`;
-      } else if (depthMeters <= 15) {
-        depthCategory = 'Orta Derinlik (5-15m)';
-        depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Kıyı basamağı derinliğidir; yerel akıntı ve dip çökellerine göre iskandil kontrolü önerilir.`;
+      // Math.abs(avg) yalnızca şu 3 koşul sağlandığında geçerlidir:
+      // 1. Bağımsız coğrafi kontrol noktanın karada olmadığını doğrulamalıdır (zoneType !== 'kara').
+      // 2. avg değeri geçerli ve sonlu bir sayı olmalıdır (Number.isFinite(avg)).
+      // 3. EMODnet yanıtındaki referans metaverisi geçerli bir batimetri DTM kimliğini teyit etmelidir.
+      if (!hasValidDtmRef) {
+        depthMeters = null;
+        depthCategory = 'Derinlik verisi doğrulanamadı';
+        depthNote = 'EMODnet DTM referans bilgisi doğrulanmadı; belgelenmiş düşey referans kanıtı olmadan derinlik üretilmedi.';
       } else {
-        depthCategory = 'Derin Su (>15m)';
-        depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Açık su / tekne derinliğidir.`;
+        const positiveDepth = Math.abs(emodnetRes.avg);
+        depthMeters = Math.round(positiveDepth * 10) / 10;
+
+        if (typeof emodnetRes.min === 'number' && Number.isFinite(emodnetRes.min)) {
+          minDepthMeters = Math.round(Math.abs(emodnetRes.min) * 10) / 10;
+        }
+        if (typeof emodnetRes.max === 'number' && Number.isFinite(emodnetRes.max)) {
+          maxDepthMeters = Math.round(Math.abs(emodnetRes.max) * 10) / 10;
+        }
+        if (typeof emodnetRes.smoothed === 'number' && Number.isFinite(emodnetRes.smoothed)) {
+          smoothedDepthMeters = Math.round(Math.abs(emodnetRes.smoothed) * 10) / 10;
+        }
+
+        if (depthMeters < 5) {
+          depthCategory = 'Sığ Kıyı (<5m)';
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Sayısal model verisidir; sığ kıyı bandında ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.`;
+        } else if (depthMeters <= 15) {
+          depthCategory = 'Orta Derinlik (5-15m)';
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Kıyı basamağı derinliğidir; yerel akıntı ve dip çökellerine göre iskandil kontrolü önerilir.`;
+        } else {
+          depthCategory = 'Derin Su (>15m)';
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Açık su / tekne derinliğidir.`;
+        }
       }
     } else if (emodnetRes.avg === 0) {
       depthMeters = 0;
       depthCategory = 'Sığ Kıyı (<5m)';
       depthNote = 'EMODnet DTM 0.0 m kotu (Kıyı çizgisi / kuruma yüksekliği sınırı). Kıyı kırılma hattında yerel iskandil ölçümü gereklidir.';
     } else {
-      // Deniz kıyısında olmasına rağmen hücre pozitif kot içeriyor (Örn. yüksek mendirek, burun kayalığı veya kıyı DTM hücresi ortalaması)
+      // Deniz kıyısında olmasına rağmen hücre pozitif kot içeriyor (Yüksek mendirek veya kıyı DTM hücresi ortalaması)
       depthMeters = null;
-      depthCategory = 'Karasal Alan';
-      depthNote = `EMODnet DTM hücresi pozitif kot içermektedir (+${emodnetRes.avg.toFixed(1)} m MSL); deniz derinliği verisi bulunamadı.`;
+      depthCategory = 'Derinlik verisi doğrulanamadı';
+      depthNote = `EMODnet DTM hücresi pozitif kot içermektedir (+${emodnetRes.avg.toFixed(1)} m MSL); deniz derinliği verisi doğrulanamadı.`;
     }
   } else {
-    // EMODnet yanıt vermediğinde veya veri yoksa:
-    // KESİN KURAL: Open-Meteo elevation API (Copernicus GLO-90 kara arazi modeli) kullanılmaz, 0 m veya uydurma değer gösterilmez.
+    // EMODnet yanıt vermediğinde, ağ hatasında, boş yanıtta, NaN veya null durumunda:
+    // Open-Meteo elevation API kesinlikle KULLANILMAZ; tahmin üretilmez.
     depthMeters = null;
-    depthCategory = 'Derinlik verisi bulunamadı';
-    depthNote = 'Derinlik verisi bulunamadı (EMODnet Bathymetry REST servisinden bu koordinat için geçerli batimetri kaydı alınamadı).';
+    depthCategory = 'Derinlik verisi doğrulanamadı';
+    depthNote = 'Derinlik verisi doğrulanamadı (EMODnet Bathymetry REST servisinden bu koordinat için doğrulanabilir batimetri kaydı alınamadı).';
   }
 
   // Dip yapısı jeolojik tespiti
