@@ -270,9 +270,21 @@ export async function fetchBathymetry(
     };
 
     const hasValidDtmRef = Boolean(emodnetRes.referenceIdentifier || emodnetRes.referenceType === 'DTM');
+    const isCoastalHeights = Boolean(
+      emodnetRes.referenceIdentifier && 
+      emodnetRes.referenceIdentifier.toLowerCase().includes('coastal_heights')
+    );
 
-    if (emodnetRes.avg < 0) {
-      // EMODnet Bathymetry'de LAT/MSL altı su derinliği negatif kot ile ifade edilir.
+    if (isCoastalHeights) {
+      // EMODnet Coastal_heights_2024 (IFREMER Sextant Kaydı SDN_CPRD_1528_Coastal_heights_2024):
+      // GTSM gelgit modeli ve kara-deniz maskesine dayalı kıyı çizgisi en yüksek astronomik gelgit (HAT)
+      // topoğrafya yüksekliği modelidir. Su altı deniz tabanı batimetrisi DEĞİLDİR.
+      // Bu nedenle deniz/kara ayrımı tek başına avg işaretine bağlanmaz ve derinlik gösterilmez.
+      depthMeters = null;
+      depthCategory = 'Derinlik verisi doğrulanamadı';
+      depthNote = `EMODnet Coastal_heights verisi (${emodnetRes.referenceIdentifier}) kıyı çizgisi arazi yüksekliği (HAT) modelidir (+${emodnetRes.avg.toFixed(2)} m); deniz tabanı su altı batimetrisi içermez (Derinlik verisi doğrulanamadı).`;
+    } else if (emodnetRes.avg < 0) {
+      // EMODnet Bathymetry'de LAT/MSL altı su derinliği negatif kot ile ifade edilir (örn. GEBCO2024).
       // Math.abs(avg) yalnızca şu 3 koşul sağlandığında geçerlidir:
       // 1. Bağımsız coğrafi kontrol noktanın karada olmadığını doğrulamalıdır (zoneType !== 'kara').
       // 2. avg değeri geçerli ve sonlu bir sayı olmalıdır (Number.isFinite(avg)).
@@ -297,13 +309,13 @@ export async function fetchBathymetry(
 
         if (depthMeters < 5) {
           depthCategory = 'Sığ Kıyı (<5m)';
-          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Sayısal model verisidir; sığ kıyı bandında ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.`;
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL · ${emodnetRes.referenceIdentifier || 'DTM'}). Sayısal model verisidir; sığ kıyı bandında ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.`;
         } else if (depthMeters <= 15) {
           depthCategory = 'Orta Derinlik (5-15m)';
-          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Kıyı basamağı derinliğidir; yerel akıntı ve dip çökellerine göre iskandil kontrolü önerilir.`;
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL · ${emodnetRes.referenceIdentifier || 'DTM'}). Kıyı basamağı derinliğidir; yerel akıntı ve dip çökellerine göre iskandil kontrolü önerilir.`;
         } else {
           depthCategory = 'Derin Su (>15m)';
-          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL). Açık su / tekne derinliğidir.`;
+          depthNote = `EMODnet DTM Derinliği: Yaklaşık ~${depthMeters} m (Düşey Referans: LAT/MSL · ${emodnetRes.referenceIdentifier || 'DTM'}). Açık su / tekne derinliğidir.`;
         }
       }
     } else if (emodnetRes.avg === 0) {
@@ -328,24 +340,38 @@ export async function fetchBathymetry(
   const substrateInfo = inferVerifiedSeabedSubstrate(lat, lng, distanceToCoastKm);
 
   // Doğrulanabilen metaveri alanları (Doğrulanamayan sabit çözünürlük veya DTM yılı yazılmaz)
+  const isCoastalHeights = Boolean(
+    emodnetRef?.identifier && 
+    emodnetRef.identifier.toLowerCase().includes('coastal_heights')
+  );
+
   const metadata: DataSourceMetadata = isFromEmodnet
     ? {
         sourceName: emodnetRef?.identifier 
           ? `EMODnet Bathymetry REST API (${emodnetRef.identifier})` 
           : 'EMODnet Bathymetry REST API',
         sourceUrl: `https://rest.emodnet-bathymetry.eu/depth_sample?geom=POINT(${lng.toFixed(6)}%20${lat.toFixed(6)})`,
-        dataType: 'Sayısal Batimetri DTM (depth_sample)',
+        dataType: isCoastalHeights
+          ? 'Kıyı Çizgisi Topoğrafya Yüksekliği Modeli (Coastal Heights / HAT)'
+          : 'Sayısal Batimetri DTM (depth_sample)',
         spatialResolution: emodnetRef?.type 
           ? `EMODnet DTM Kaynağı (${emodnetRef.type})` 
           : 'EMODnet DTM Izgarası',
-        verticalDatum: 'LAT / MSL (Lowest Astronomical Tide / Mean Sea Level)',
+        verticalDatum: isCoastalHeights
+          ? 'HAT (Highest Astronomical Tide) / Kıyı Çizgisi Yükseklik Kotu'
+          : 'LAT / MSL (Lowest Astronomical Tide / Mean Sea Level)',
         dataDate: emodnetRef?.identifier || 'EMODnet DTM Servisi',
-        verificationStatus: 'DOGRULANDI',
-        limitations: [
-          'Sayısal model verisidir; sığ kıyı bandında (<10m) ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.',
-          'Kıyı çizgisinde dalga kırılması ve nehir ağzı sedimantasyonu nedeniyle yerel derinlik değişebilir.',
-          'Resmî seyrüsefer veya seyir haritası (ENC) yerine kullanılamaz.'
-        ]
+        verificationStatus: isCoastalHeights ? 'DOGRULANAMADI' : 'DOGRULANDI',
+        limitations: isCoastalHeights
+          ? [
+              'Coastal_heights_2024 veri seti GTSM gelgit modeli ve kıyı maskesinden türetilmiş kıyı hattı kabarma/gelgit seviyesidir, deniz tabanı su derinliği değildir.',
+              'Bu kıyı koordinatında su altı batimetrisi doğrulanmamıştır; sahada el iskandili veya yerel ölçüm gerekir.'
+            ]
+          : [
+              'Sayısal model verisidir; sığ kıyı bandında (<10m) ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.',
+              'Kıyı çizgisinde dalga kırılması ve nehir ağzı sedimantasyonu nedeniyle yerel derinlik değişebilir.',
+              'Resmî seyrüsefer veya seyir haritası (ENC) yerine kullanılamaz.'
+            ]
       }
     : {
         sourceName: 'EMODnet Bathymetry REST API',

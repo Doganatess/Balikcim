@@ -122,9 +122,9 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
     safetyAssessment: createUnavailableSafetyAssessment(),
     bestWindow: region.conditions.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
-    modelTime: '--:--',
+    modelTime: 'Model Zamanı Yok',
     fetchTime: '--:--',
-    lastUpdatedText: 'Referans veri, güncel ölçüm değil (API Yanıt Vermedi)',
+    lastUpdatedText: 'Model zaman damgası yok (API Yanıt Vermedi · Referans Değer)',
     hourlyForecast: [],
     apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Güncel veri yok — güvenlik değerlendirilemiyor.'
   };
@@ -267,7 +267,7 @@ export const ConditionsGrid: React.FC<ConditionsGridProps> = ({
             {isLoading 
               ? 'Open-Meteo sayısal tahmin modelleri sorgulanıyor...' 
               : !isLiveOrCached
-              ? 'Referans veri, güncel ölçüm değil (API yanıt vermedi)'
+              ? 'Model zaman damgası yok (Referans model, API yanıt vermedi)'
               : activeMode === 'planla' && plannedHour
               ? `Planlanan Saat: ${plannedHour.hour} (${c.lastUpdatedText})`
               : c.lastUpdatedText}
