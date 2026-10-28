@@ -4,7 +4,7 @@
  * Şeffaflık İlkeleri:
  * 1. Hava sıcaklığı, rüzgâr (hız, hamle, yön), basınç (MSL), bulut, yağış -> Open-Meteo Sayısal Hava Tahmin Modeli (NWP)
  * 2. Dalga (yükseklik, periyot, rüzgâr dalgası, swell) -> Open-Meteo Marine API (Açık deniz sayısal hidrodinamik modeli)
- * 3. Su sıcaklığı -> Open-Meteo Marine API / Copernicus L4 deniz suyu analizi (Kıyıda anlık ölçüm sensörü yoktur)
+ * 3. Su sıcaklığı -> Open-Meteo Marine API (Sayısal deniz modeli tahmini; kıyıda anlık ölçüm sensörü yoktur)
  * 4. Akıntı -> Open-Meteo Marine API (ocean_current_velocity & direction) sayısal modeli
  * 5. Ay fazı -> Matematiksel astronomik algoritma
  * 6. Av aktivite puanı -> Kural tabanlı hidro-meteorolojik teorik model (Biyokütle veya av başarısı garantisi değildir; bir güvenlik değerlendirmesi değildir)
@@ -413,15 +413,17 @@ export async function fetchLiveMarineAndWeather(
         waveSource = 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil';
       }
 
-      // Deniz Suyu Sıcaklığı (SST) - Gerçek Open-Meteo Marine / Copernicus analizinden
+      // Deniz Suyu Sıcaklığı (SST) - Open-Meteo Marine Sayısal Model Tahmini
       let waterTemp: number | null = null;
       let waterTempNote = 'Veri alınamadı / Kıyı SST sensörü bulunmuyor';
       if (marineData?.current && typeof marineData.current.sea_surface_temperature === 'number') {
         waterTemp = Math.round(marineData.current.sea_surface_temperature * 10) / 10;
-        waterTempNote = 'Open-Meteo Marine (Copernicus L4 deniz suyu analizi · ~5-8 km model grid)';
+        const timeStr = marineData.current.time ? ` (${marineData.current.time.slice(0, 16).replace('T', ' ')})` : '';
+        waterTempNote = `Open-Meteo Marine Sayısal Model Tahmini${timeStr} · Kıyı fiziksel sensör ölçümü değildir`;
       } else if (marineData?.hourly?.sea_surface_temperature && currentHourIndex >= 0 && typeof marineData.hourly.sea_surface_temperature[currentHourIndex] === 'number') {
         waterTemp = Math.round(marineData.hourly.sea_surface_temperature[currentHourIndex] * 10) / 10;
-        waterTempNote = 'Open-Meteo Marine (Copernicus L4 saatlik analiz)';
+        const timeStr = marineData.hourly.time?.[currentHourIndex] ? ` (${marineData.hourly.time[currentHourIndex].slice(0, 16).replace('T', ' ')})` : '';
+        waterTempNote = `Open-Meteo Marine Sayısal Model Tahmini${timeStr} · Kıyı fiziksel sensör ölçümü değildir`;
       }
 
       // Akıntı (Ocean Current) - Gerçek Open-Meteo Marine hidrodinamik modelinden

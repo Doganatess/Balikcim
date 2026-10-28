@@ -1385,10 +1385,10 @@ export const IdealAvSahasiMap: React.FC<IdealAvSahasiMapProps> = ({
 
             <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[9.5px] text-slate-300 leading-relaxed space-y-1">
               <div>
-                <strong className="text-rose-300">Renkler hakkında:</strong> Bu ekranda NASA katmanının gerçek renk skalası ve sıcaklık değerleri doğrulanmış değildir. Bu nedenle renkleri belirli sıcaklık dereceleri olarak yorumlamayın. Katmanın görünmesi, balık yoğunluğunu veya av başarısını göstermez.
+                <strong className="text-rose-300">Görsel Uydu Katmanı:</strong> NASA GIBS GHRSST MUR L4 raster döşemeleri harita üzerinde genel termal dağılımı görselleştirmek içindir. Görüntü katmanından tek başına noktasal koordinata ait sayısal sıcaklık veya akıntı ölçümü üretilmez.
               </div>
-              <div className="text-[8.5px] text-slate-500 font-mono pt-0.5 border-t border-slate-800/80">
-                * NASA GIBS GHRSST MUR L4 katmanı döşemeleri default/default ayarıyla çağrılmaktadır; anlık veya gerçek zamanlı kıyı ölçümü değildir.
+              <div className="text-[8.5px] text-slate-400 font-mono pt-0.5 border-t border-slate-800/80">
+                * Sayısal deniz suyu sıcaklığı için aşağıdaki analiz panelinde Open-Meteo model tahmini ve zaman damgası gösterilmektedir.
               </div>
             </div>
 

@@ -34,6 +34,7 @@ import {
 } from '../services/emodnetBiologyService';
 import { 
   COPERNICUS_BLACK_SEA_PRODUCTS, 
+  NASA_GIBS_INFO,
   getCopernicusMarineAuditInfo 
 } from '../services/copernicusMarineService';
 import { LiveConditionsData } from '../services/openMeteoService';
@@ -84,7 +85,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
     limitations: string[];
   } | null>(null);
 
-  // Copernicus Marine Audit Modalı
+  // Copernicus Marine & NASA GIBS Audit Modalı
   const [showCopernicusModal, setShowCopernicusModal] = useState(false);
 
   // 1. Koordinat değiştikçe gerçek EMODnet Bathymetry REST API sorgusu
@@ -187,7 +188,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
             <h3 className="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5">
               <span>Bütünleşik Kıyıdan Av Analizi</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800">
-                Gerçek API & Doğrulanmış Kaynaklar
+                Gerçek API & Doğrulanmış Veri
               </span>
             </h3>
           </div>
@@ -330,16 +331,16 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               </span>
               <button
                 onClick={() => setSelectedMetaModal({
-                  title: 'EMODnet Bathymetry & GEBCO Sayısal Derinlik Modeli',
-                  sourceName: bathymetry?.metadata.sourceName || 'EMODnet Bathymetry REST API / GEBCO 2024 DTM',
+                  title: 'EMODnet Bathymetry Sayısal Derinlik Modeli',
+                  sourceName: bathymetry?.metadata.sourceName || 'EMODnet Bathymetry REST API',
                   sourceUrl: bathymetry?.metadata.sourceUrl || 'https://rest.emodnet-bathymetry.eu/',
-                  dataType: bathymetry?.metadata.dataType || 'Sayısal Arazi/Batimetri Modeli (DEM/DTM)',
-                  spatialResolution: bathymetry?.metadata.spatialResolution || '1/16 arc-minute (~115m x 125m)',
-                  dataDate: bathymetry?.metadata.dataDate || '2024 Resmî DTM',
-                  verificationStatus: bathymetry?.metadata.verificationStatus || 'DOGRULANDI',
+                  dataType: bathymetry?.metadata.dataType || 'Sayısal Batimetri DTM',
+                  spatialResolution: bathymetry?.metadata.spatialResolution || 'EMODnet DTM Izgarası',
+                  dataDate: bathymetry?.metadata.dataDate || 'EMODnet DTM',
+                  verificationStatus: bathymetry?.metadata.verificationStatus || 'DOGRULANAMADI',
                   limitations: bathymetry?.metadata.limitations || [
-                    'Sığ kıyı bandında (<10m) dalga kırılması ve kıyı sedimantasyonu nedeniyle yerel derinlik değişebilir.',
-                    'Dip yapısı Karadeniz bölgesel jeolojik haritalarına dayanır; yerinde iskandil kontrolü önerilir.'
+                    'Sayısal model verisidir; sığ kıyı bandında (<10m) ve mendirek diplerinde yerel iskandil ölçümü yerine geçmez.',
+                    'Geçerli batimetri sonucu alınamadığında tahmin üretilmez; veri bulunamadı olarak bildirilir.'
                   ]
                 })}
                 className="text-[10px] text-cyan-400 hover:underline flex items-center gap-0.5"
@@ -358,10 +359,16 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               <div className="text-xs text-slate-300 space-y-1.5">
                 <div className="flex items-baseline justify-between p-2 rounded-lg bg-slate-900/90 border border-slate-800">
                   <span className="text-[11px] text-slate-400">Modellenen Derinlik:</span>
-                  <span className="text-sm font-mono font-bold text-cyan-300">
+                  <span className={`text-sm font-mono font-bold ${
+                    bathymetry?.depthMeters !== null && bathymetry?.depthMeters !== undefined
+                      ? 'text-cyan-300'
+                      : 'text-amber-400/90 text-xs'
+                  }`}>
                     {bathymetry?.depthMeters !== null && bathymetry?.depthMeters !== undefined
                       ? `~${bathymetry.depthMeters} m`
-                      : 'Kıyı Çözünürlüğü Sınırlı'}
+                      : bathymetry?.depthCategory === 'Karasal Alan'
+                      ? 'Karasal Alan'
+                      : 'Derinlik verisi bulunamadı'}
                   </span>
                 </div>
 
@@ -386,8 +393,8 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
           </div>
 
           <div className="mt-2 text-[9px] text-slate-500 pt-1.5 border-t border-slate-800/60 font-mono flex items-center justify-between">
-            <span>DTM: {bathymetry?.emodnetReference?.identifier || 'GEBCO2024 / EMODnet'}</span>
-            <span className="text-cyan-400">{bathymetry?.metadata.spatialResolution || '1/16 arc-min'}</span>
+            <span>Referans: {bathymetry?.emodnetReference?.identifier || 'EMODnet DTM'}</span>
+            <span className="text-cyan-400">{bathymetry?.metadata.spatialResolution || 'EMODnet DTM Izgarası'}</span>
           </div>
         </div>
 
@@ -509,20 +516,21 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               onClick={() => setShowCopernicusModal(true)}
               className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 font-semibold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60"
             >
-              <span>Copernicus Marine Servisi</span>
+              <span>Copernicus & GIBS Ayrımı</span>
               <Layers className="w-3 h-3" />
             </button>
 
             <button
               onClick={() => setSelectedMetaModal({
                 title: 'Open-Meteo Weather & Marine API Entegrasyonu',
-                sourceName: 'Open-Meteo European/Global Sayısal Hava & Marine Dalga Modeli',
+                sourceName: 'Open-Meteo Sayısal Hava ve Deniz Tahmin Modelleri',
                 sourceUrl: 'https://open-meteo.com/en/docs',
-                dataType: 'Atmosferik ve Oşinografik Sayısal Tahmin Modeli',
-                spatialResolution: '~2-11 km atmosferik grid / ~5-8 km Copernicus Marine grid',
+                dataType: 'Sayısal Model Tahmini (NWP & Marine Hydrodynamic Model)',
+                spatialResolution: 'Açık Deniz Grid Modeli (~5-11 km)',
                 dataDate: liveConditions?.modelTime || 'Güncel Saatlik Döngü',
                 verificationStatus: liveConditions?.hasValidMarineData ? 'DOGRULANDI' : 'KISMI',
                 limitations: [
+                  'Open-Meteo açık hava ve deniz modellerinden gelen sayısal tahminlerdir.',
                   'Açık deniz hidrodinamik modelleri sahil bandındaki mikroklima, dalga kırılması ve mendirek sekmesini birebir yansıtmaz.',
                   'Yerinde fiziksel kıyı ölçüm şamandırası olmayıp sayısal tahmin çıktısıdır.'
                 ]
@@ -560,12 +568,12 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
             <span className={`font-bold block truncate ${
               liveConditions?.waveSource.includes('Marine') ? 'text-emerald-300' : 'text-amber-300'
             }`}>
-              {liveConditions?.waveSource || 'Referans Model'}
+              {liveConditions?.waveSource || 'Open-Meteo Marine'}
             </span>
           </div>
         </div>
 
-        {/* Dalga ve Rüzgâr Detay Bileşenleri */}
+        {/* Dalga, Rüzgâr ve Su Sıcaklığı Detay Bileşenleri */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-800/80 text-[10.5px] text-slate-300">
           <div>
             <span>Belirgin Dalga (Hm0): </span>
@@ -593,10 +601,17 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               </span>
             )}
           </div>
+
+          {liveConditions?.waterTemp !== null && liveConditions?.waterTemp !== undefined && (
+            <div className="w-full text-[10px] text-slate-400 pt-0.5 border-t border-slate-800/40 flex items-center justify-between">
+              <span>Deniz Suyu Sıcaklığı: <strong className="text-rose-300 font-mono">{liveConditions.waterTemp} °C</strong></span>
+              <span className="text-slate-500 font-mono text-[9px]">{liveConditions.waterTempNote}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 4. Copernicus Marine Servis İnceleme Modalı */}
+      {/* 4. Copernicus Marine & NASA GIBS Servis İnceleme Modalı */}
       {showCopernicusModal && (
         <div 
           onClick={() => setShowCopernicusModal(false)}
@@ -610,8 +625,8 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-400" />
                 <div>
-                  <h4 className="font-bold text-white text-sm">Copernicus Marine (CMEMS) Servis Denetimi</h4>
-                  <span className="text-[10px] text-slate-400">Karadeniz Oşinografi Ürünleri ve Güvenli Veri Akışı</span>
+                  <h4 className="font-bold text-white text-sm">Copernicus Marine ve NASA GIBS Servis Ayrımı</h4>
+                  <span className="text-[10px] text-slate-400">Veri Kaynakları, Kimlik Denetimi ve Sayısal Ölçüm Şeffaflığı</span>
                 </div>
               </div>
               <button
@@ -623,22 +638,36 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-900/50 space-y-1 text-[11px] leading-relaxed">
-              <span className="font-bold text-blue-300 block">Doğrudan CMEMS API ve Kimlik Denetimi Şeffaflığı:</span>
-              <p className="text-slate-300">
-                Resmî Copernicus Marine Veri Mağazası (<code>data.marine.copernicus.eu</code>) doğrudan Subsetter / STAC NetCDF indirme uç noktaları için CMEMS kullanıcı adı ve CAS Token kimlik doğrulaması gerektirir. Güvenlik ilkeleri uyarınca tarayıcı istemcisine hiçbir özel anahtar veya şifre gömülmez.
-              </p>
-              <p className="text-emerald-300 pt-1">
-                ✓ Karadeniz fiziksel hidrodinamik ve dalga modelleri kamuya açık Open-Meteo Marine API köprüsü üzerinden; yüksek çözünürlüklü deniz yüzeyi sıcaklık analizi (GHRSST L4) ise NASA GIBS açık WMTS harita katmanı üzerinden gerçek zamanlı beslenmektedir.
-              </p>
+            {/* Şeffaflık İlkeleri Kutusu */}
+            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-[11px] leading-relaxed">
+              <div>
+                <strong className="text-amber-300 block mb-0.5">1. Doğrudan Copernicus Marine (CMEMS) API Durumu:</strong>
+                <p className="text-slate-300">
+                  Resmî Copernicus Marine Veri Mağazası (<code>data.marine.copernicus.eu</code>) doğrudan Subsetter / STAC / NetCDF indirme servisleri için CMEMS kullanıcı hesabı ve CAS Token kimlik doğrulaması gerektirir. Güvenlik ilkeleri uyarınca tarayıcı istemcisine asla kullanıcı şifresi veya token gömülmez. Bu nedenle doğrudan CMEMS API entegrasyonu bu istemci uygulamasında aktif değildir; ürünler resmî katalog referansı olarak listelenmektedir.
+                </p>
+              </div>
+
+              <div className="pt-1 border-t border-slate-800">
+                <strong className="text-cyan-300 block mb-0.5">2. Sayısal Ölçüm Kaynağı (Open-Meteo Marine):</strong>
+                <p className="text-slate-300">
+                  Uygulamada gösterilen sayısal hava durumu, rüzgâr, belirgin dalga boyu ve deniz suyu sıcaklığı değerleri doğrudan Open-Meteo açık sayısal model tahminlerinden alınmaktadır ve <em>Open-Meteo Marine Sayısal Model Tahmini</em> olarak etiketlenmiştir.
+                </p>
+              </div>
+
+              <div className="pt-1 border-t border-slate-800">
+                <strong className="text-rose-300 block mb-0.5">3. NASA GIBS Uydu Katmanı Ayrımı:</strong>
+                <p className="text-slate-300">
+                  Harita üzerinde açılabilen deniz sıcaklığı katmanı, NASA GIBS GHRSST MUR L4 raster döşeme (WMTS) servisidir. Bu katman harita arka planında görsel termal dağılım sunar; tek başına tıklanan koordinata ait sayısal sıcaklık veya akıntı ölçümü üretmez.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2.5">
-              <h5 className="font-bold text-slate-200 text-xs">Karadeniz İçin Tanımlı Resmî CMEMS Ürünleri:</h5>
+              <h5 className="font-bold text-slate-200 text-xs">Karadeniz İçin Resmî Copernicus Marine Ürünleri (Katalog Referansı):</h5>
               
               {Object.entries(COPERNICUS_BLACK_SEA_PRODUCTS).map(([key, prod]) => (
                 <div key={key} className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5 text-[10.5px]">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
                     <span className="font-bold text-cyan-300 font-mono">{prod.productId}</span>
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[9.5px]">
                       Çözünürlük: {prod.spatialResolution}
@@ -649,15 +678,18 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
                   <div className="text-slate-300">
                     <strong className="text-slate-400">Değişkenler:</strong> {prod.variables.join(', ')}
                   </div>
+                  <div className="p-1.5 rounded bg-amber-950/30 border border-amber-900/40 text-amber-300 text-[9.5px]">
+                    {prod.integrationNotice}
+                  </div>
                   <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/80">
-                    <span>Erişim Yolu: <span className="text-emerald-300 font-medium">{prod.publicBridgeUsed}</span></span>
+                    <span>Erişim Yöntemi: {prod.accessMethod}</span>
                     <a 
                       href={prod.catalogUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-cyan-400 hover:underline inline-flex items-center gap-1"
                     >
-                      <span>Resmî Katalog</span>
+                      <span>Resmî Katalogda İncele</span>
                       <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                   </div>
@@ -669,7 +701,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
               onClick={() => setShowCopernicusModal(false)}
               className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition text-xs"
             >
-              Kapat
+              Anladım, Kapat
             </button>
           </div>
         </div>
