@@ -14,7 +14,10 @@ export type SafetyStatusType = 'Güvenli' | 'Orta Dalgalı' | 'Riskli - Kıyıda
 
 export interface HourlyForecastItem {
   hour: string; // "14:00"
-  isoTime: string;
+  isoTime: string; // "2026-10-28T14:00"
+  forecastTime: string; // "2026-10-28 14:00" (Doğrudan hourly.time dizisinden)
+  weatherTime: string; // "2026-10-28 14:00" (Hava modeli saatlik zamanı)
+  marineTime: string | null; // Eşleşen deniz modeli saatlik zamanı (varsa "2026-10-28 14:00", yoksa null)
   score: number | null; // Aktivite göstergesidir; güvenlik değerlendirmesi veya yakalama garantisi değildir!
   desc: string;
   temp?: number;
@@ -29,7 +32,7 @@ export interface HourlyForecastItem {
   windWaveHeight?: number | null;
   swellWaveHeight?: number | null;
   hasMarineWaveData?: boolean;
-  waveSource?: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil';
+  waveSource?: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Marine Dalga Verisi Yok' | 'Referans Model';
   weatherCode?: number;
   safetyRating: 'Uygun' | 'Dikkat' | 'Riskli' | 'Belirsiz';
   safetyExplanation: string;
@@ -54,7 +57,7 @@ export interface LiveConditionsData {
   airTemp: number; // °C (Sayısal model 2m)
   waterTemp: number | null; // °C (Open-Meteo Marine / Copernicus L4 referansı, veri yoksa null)
   waterTempNote: string;
-  rainChance: number; // % (Sayısal model yağış ihtimali)
+  rainChance: number; // % (Sayısal model saatlik yağış ihtimali)
   precipitationMm: number; // mm (Sayısal model yağış miktarı)
   waveHeight: number | null; // metre (Toplam belirgin dalga boyu Hm0, veri yoksa null)
   wavePeriod: number | null; // saniye (Ortalama dalga periyodu, veri yoksa null)
@@ -85,7 +88,24 @@ export interface LiveConditionsData {
   safetyAssessment: PracticalSafetyAssessment;
   bestWindow: string;
   sourceStatus: 'MODEL_OPEN_METEO' | 'ONBELLEK' | 'YEDEK_MODEL';
-  modelTime: string;
+
+  // Gerçek Zaman Damgaları (Kesin Kaynak Ayrımı):
+  weatherModelTime: string | null; // Weather API current.time (örn: "2026-10-28 20:45")
+  marineModelTime: string | null; // Marine API current.time (örn: "2026-10-28 20:00")
+  matchedForecastTime: string | null; // Weather API hourly.time[currentHourIndex] (örn: "2026-10-28 21:00")
+  matchedMarineForecastTime: string | null; // Marine API hourly.time[marineHourIndex] (örn: "2026-10-28 21:00")
+  timezone: string; // "Europe/Istanbul"
+
+  // Parametre Bazlı Zaman Damgaları:
+  airTempTime: string | null; // Weather API current.time
+  windTime: string | null; // Weather API current.time
+  precipitationTime: string | null; // Weather API current.time
+  rainChanceTime: string | null; // Weather API hourly.time[currentHourIndex]
+  waveTime: string | null; // Marine API current.time veya hourly.time
+  waterTempTime: string | null; // Marine API current.time veya hourly.time
+  currentTime: string | null; // Marine API current.time
+
+  modelTime: string; // Geriye dönük uyumluluk etiketi
   fetchTime: string;
   lastUpdatedText: string;
   hourlyForecast: HourlyForecastItem[];
@@ -366,48 +386,58 @@ export async function fetchLiveMarineAndWeather(
       const windDirectionDeg = c.wind_direction_10m || 0;
       const windDirection = degreeToTurkishDirection(windDirectionDeg);
 
-      // Zaman damgası ve saatlik aralık eşleştirmesi:
-      // API'den dönen gerçek current.time (örn: "2026-10-28T20:45") esas alınır.
-      // timezone=auto parametresi ile Open-Meteo Samsun/Ordu koordinatları için Europe/Istanbul (UTC+3) döner.
-      const apiCurrentTimeRaw: string = typeof c.time === 'string' ? c.time : '';
+      // 1. Weather API Gerçek Zaman Damgası (current.time)
+      const rawWeatherCurrentTime: string | undefined = typeof c.time === 'string' && c.time ? c.time : undefined;
+      const weatherModelTime = rawWeatherCurrentTime ? rawWeatherCurrentTime.replace('T', ' ') : null;
+      const timezone: string = weatherData?.timezone || 'Europe/Istanbul';
+
+      // 2. Marine API Gerçek Zaman Damgası (current.time)
+      const rawMarineCurrentTime: string | undefined = typeof marineData?.current?.time === 'string' && marineData.current.time ? marineData.current.time : undefined;
+      const marineModelTime = rawMarineCurrentTime ? rawMarineCurrentTime.replace('T', ' ') : null;
+
+      // 3. Saatlik Tahmin Zamanı Eşleştirmesi (Weather API hourly.time)
+      // current.time (örn: 20:45) ile hourly.time (örn: 21:00) arasındaki en yakın saat adımı bulunur
+      // ve seçilen saatlik verinin zamanı DOĞRUDAN diziden alınır.
       let currentHourIndex = -1;
+      let matchedForecastTime: string | null = null;
 
-      if (apiCurrentTimeRaw && weatherData.hourly && Array.isArray(weatherData.hourly.time)) {
-        const times = weatherData.hourly.time;
-        // 1. Dakika bazlı yuvarlama: 30. dakika ve üzeri sonraki saat adımına yuvarlanır (örn: 20:45 -> 21:00)
-        if (apiCurrentTimeRaw.includes('T')) {
-          const [dPart, tPart] = apiCurrentTimeRaw.split('T');
-          const [hStr, mStr] = (tPart || '').split(':');
-          const h = parseInt(hStr, 10);
-          const m = parseInt(mStr, 10) || 0;
-          if (!isNaN(h)) {
-            const targetH = m >= 30 ? h + 1 : h;
-            if (targetH < 24) {
-              const targetPrefix = `${dPart}T${String(targetH).padStart(2, '0')}`;
-              currentHourIndex = times.findIndex((t: string) => t.startsWith(targetPrefix));
+      if (rawWeatherCurrentTime && weatherData?.hourly && Array.isArray(weatherData.hourly.time)) {
+        const times: string[] = weatherData.hourly.time;
+        const currentMs = new Date(rawWeatherCurrentTime).getTime();
+
+        if (!isNaN(currentMs)) {
+          let minDiff = Infinity;
+          times.forEach((t: string, idx: number) => {
+            const hMs = new Date(t).getTime();
+            const diff = Math.abs(hMs - currentMs);
+            if (diff < minDiff) {
+              minDiff = diff;
+              currentHourIndex = idx;
             }
-          }
-        }
+          });
 
-        // 2. Gün aşımı veya format sapmalarında milisaniye farkı ile en yakın saatlik adımı seç
-        if (currentHourIndex < 0) {
-          const apiCurrentMs = new Date(apiCurrentTimeRaw).getTime();
-          if (!isNaN(apiCurrentMs)) {
-            let minDiff = Infinity;
-            times.forEach((t: string, idx: number) => {
-              const diff = Math.abs(new Date(t).getTime() - apiCurrentMs);
-              if (diff < minDiff) {
-                minDiff = diff;
-                currentHourIndex = idx;
-              }
-            });
+          if (currentHourIndex >= 0 && typeof times[currentHourIndex] === 'string') {
+            matchedForecastTime = times[currentHourIndex].replace('T', ' ');
           }
         }
       }
 
+      // 4. Marine API saatlik zaman eşleştirmesi
+      let marineHourIndex = -1;
+      let matchedMarineForecastTime: string | null = null;
+      if (currentHourIndex >= 0 && weatherData?.hourly?.time?.[currentHourIndex] && marineData?.hourly?.time && Array.isArray(marineData.hourly.time)) {
+        const targetIso = weatherData.hourly.time[currentHourIndex];
+        marineHourIndex = marineData.hourly.time.indexOf(targetIso);
+        if (marineHourIndex >= 0) {
+          matchedMarineForecastTime = marineData.hourly.time[marineHourIndex].replace('T', ' ');
+        }
+      }
+
+      // Yağış olasılığı (hourly.precipitation_probability[currentHourIndex])
       const rainChance = currentHourIndex >= 0 && typeof weatherData.hourly?.precipitation_probability?.[currentHourIndex] === 'number'
         ? weatherData.hourly.precipitation_probability[currentHourIndex]
         : (precipitationMm > 0 ? 80 : 0);
+      const rainChanceTime = matchedForecastTime;
 
       // Open-Meteo Marine Verisi Çözümlemesi
       const hasValidMarineData = Boolean(
@@ -423,6 +453,7 @@ export async function fetchLiveMarineAndWeather(
       let waveDirection = windDirection;
       let waveDirectionDeg = windDirectionDeg;
       let waveSource: 'Açık Deniz Dalga Modeli (Open-Meteo Marine)' | 'Marine Dalga Verisi Yok' | 'Referans Model';
+      let waveTime: string | null = null;
 
       if (hasValidMarineData) {
         waveHeight = Math.round(marineData.current.wave_height * 10) / 10;
@@ -440,23 +471,27 @@ export async function fetchLiveMarineAndWeather(
           waveDirection = degreeToTurkishDirection(waveDirectionDeg);
         }
         waveSource = 'Açık Deniz Dalga Modeli (Open-Meteo Marine)';
+        waveTime = marineModelTime;
       } else {
         waveHeight = null;
         wavePeriod = null;
         waveSource = 'Marine Dalga Verisi Yok';
+        waveTime = null;
       }
 
       // Deniz Suyu Sıcaklığı (SST) - Open-Meteo Marine Sayısal Model Tahmini
       let waterTemp: number | null = null;
-      let waterTempNote = 'Veri alınamadı / Kıyı SST sensörü bulunmuyor';
+      let waterTempNote = 'Zaman bilgisi bulunamadı / Kıyı SST sensörü bulunmuyor';
+      let waterTempTime: string | null = null;
+
       if (marineData?.current && typeof marineData.current.sea_surface_temperature === 'number') {
         waterTemp = Math.round(marineData.current.sea_surface_temperature * 10) / 10;
-        const timeStr = marineData.current.time ? ` (${marineData.current.time.slice(0, 16).replace('T', ' ')})` : '';
-        waterTempNote = `Open-Meteo Marine Sayısal Model Tahmini${timeStr} · Kıyı fiziksel sensör ölçümü değildir`;
-      } else if (marineData?.hourly?.sea_surface_temperature && currentHourIndex >= 0 && typeof marineData.hourly.sea_surface_temperature[currentHourIndex] === 'number') {
-        waterTemp = Math.round(marineData.hourly.sea_surface_temperature[currentHourIndex] * 10) / 10;
-        const timeStr = marineData.hourly.time?.[currentHourIndex] ? ` (${marineData.hourly.time[currentHourIndex].slice(0, 16).replace('T', ' ')})` : '';
-        waterTempNote = `Open-Meteo Marine Sayısal Model Tahmini${timeStr} · Kıyı fiziksel sensör ölçümü değildir`;
+        waterTempTime = marineModelTime;
+        waterTempNote = `Open-Meteo Marine Sayısal Model (Model Zamanı: ${marineModelTime || 'Zaman bilgisi bulunamadı'} · ${timezone})`;
+      } else if (marineHourIndex >= 0 && typeof marineData?.hourly?.sea_surface_temperature?.[marineHourIndex] === 'number') {
+        waterTemp = Math.round(marineData.hourly.sea_surface_temperature[marineHourIndex] * 10) / 10;
+        waterTempTime = matchedMarineForecastTime;
+        waterTempNote = `Open-Meteo Marine Saatlik Tahmin (Tahmin Zamanı: ${matchedMarineForecastTime || 'Zaman bilgisi bulunamadı'} · ${timezone})`;
       }
 
       // Akıntı (Ocean Current) - Gerçek Open-Meteo Marine hidrodinamik modelinden
@@ -465,6 +500,7 @@ export async function fetchLiveMarineAndWeather(
       let currentDirection: string | null = null;
       let currentDirectionDeg: number | undefined = undefined;
       let currentType: 'Open-Meteo Marine (Hidrodinamik Model)' | 'Ölçüm/Model verisi yok' | 'Rüzgâr ve Morfolojiden Teorik Hesaplanan Akıntı' = 'Ölçüm/Model verisi yok';
+      let currentTime: string | null = null;
 
       if (marineData?.current && typeof marineData.current.ocean_current_velocity === 'number') {
         const speedKmH = Math.round(marineData.current.ocean_current_velocity * 10) / 10;
@@ -475,6 +511,7 @@ export async function fetchLiveMarineAndWeather(
           currentDirection = degreeToTurkishDirection(marineData.current.ocean_current_direction);
         }
         currentType = 'Open-Meteo Marine (Hidrodinamik Model)';
+        currentTime = marineModelTime;
       }
 
       const moon = calculateAstronomicalMoonPhase(new Date());
@@ -513,11 +550,21 @@ export async function fetchLiveMarineAndWeather(
           const hWindDeg = weatherData.hourly.wind_direction_10m?.[i] ?? 0;
           const hWindDir = degreeToTurkishDirection(hWindDeg);
 
-          const hasHourlyMarine = typeof marineData?.hourly?.wave_height?.[i] === 'number';
-          const hWave = hasHourlyMarine ? Math.round(marineData.hourly.wave_height[i] * 10) / 10 : null;
-          const hWavePeriod = typeof marineData?.hourly?.wave_period?.[i] === 'number' ? Math.round(marineData.hourly.wave_period[i] * 10) / 10 : null;
-          const hWindWave = typeof marineData?.hourly?.wind_wave_height?.[i] === 'number' ? Math.round(marineData.hourly.wind_wave_height[i] * 10) / 10 : null;
-          const hSwellWave = typeof marineData?.hourly?.swell_wave_height?.[i] === 'number' ? Math.round(marineData.hourly.swell_wave_height[i] * 10) / 10 : null;
+          // Marine saatlik zamanını index yerine ISO string ile birebir eşleştir
+          let mIdx = -1;
+          let marineItemTime: string | null = null;
+          if (marineData?.hourly?.time && Array.isArray(marineData.hourly.time)) {
+            mIdx = marineData.hourly.time.indexOf(tIso);
+            if (mIdx >= 0) {
+              marineItemTime = marineData.hourly.time[mIdx].replace('T', ' ');
+            }
+          }
+
+          const hasHourlyMarine = mIdx >= 0 && typeof marineData?.hourly?.wave_height?.[mIdx] === 'number';
+          const hWave = hasHourlyMarine ? Math.round(marineData.hourly.wave_height[mIdx] * 10) / 10 : null;
+          const hWavePeriod = mIdx >= 0 && typeof marineData?.hourly?.wave_period?.[mIdx] === 'number' ? Math.round(marineData.hourly.wave_period[mIdx] * 10) / 10 : null;
+          const hWindWave = mIdx >= 0 && typeof marineData?.hourly?.wind_wave_height?.[mIdx] === 'number' ? Math.round(marineData.hourly.wind_wave_height[mIdx] * 10) / 10 : null;
+          const hSwellWave = mIdx >= 0 && typeof marineData?.hourly?.swell_wave_height?.[mIdx] === 'number' ? Math.round(marineData.hourly.swell_wave_height[mIdx] * 10) / 10 : null;
 
           // Aktivite Puanı: Teorik Solunar + Sayısal rüzgâr/yağış ağırlıklı balık beslenme tahminidir.
           // DİKKAT: Bu puan bir güvenlik değerlendirmesi değildir; güvenli avlanma garantisi olarak kullanılamaz.
@@ -550,9 +597,14 @@ export async function fetchLiveMarineAndWeather(
           else if (finalScore >= 70) desc = 'Aktif pencere (Güvenlik ayrıca kontrol edilmelidir)';
           else if (finalScore < 50) desc = 'Düşük hareket';
 
+          const forecastTimeStr = tIso.replace('T', ' ');
+
           hourlyForecast.push({
             hour: hourLabel,
             isoTime: times[i],
+            forecastTime: forecastTimeStr,
+            weatherTime: forecastTimeStr,
+            marineTime: marineItemTime,
             score: finalScore,
             desc,
             temp: hTemp,
@@ -569,7 +621,7 @@ export async function fetchLiveMarineAndWeather(
             hasMarineWaveData: hasHourlyMarine,
             waveSource: hasHourlyMarine
               ? 'Açık Deniz Dalga Modeli (Open-Meteo Marine)'
-              : 'Rüzgârdan türetilmiş tahmin; gerçek dalga ölçümü değil',
+              : 'Marine Dalga Verisi Yok',
             weatherCode: weatherData.hourly.weather_code?.[i],
             safetyRating: hourSafety.rating,
             safetyExplanation: hourSafety.summary
@@ -577,17 +629,16 @@ export async function fetchLiveMarineAndWeather(
         }
       }
 
-      // API zaman damgası kontrolü: Eksikse ASLA sistem saati yerine konulmaz!
-      const hasApiTime = Boolean(apiCurrentTimeRaw);
-      const apiTimeDisplay = hasApiTime ? apiCurrentTimeRaw.replace('T', ' ') : 'Model Zamanı Yok';
-      const apiTz = weatherData.timezone || 'Europe/Istanbul';
+      // İki zaman damgasını asla tek bir zamanmış gibi birleştirmeyiz:
+      // weatherModelTime: API current.time (örn. "2026-10-28 20:45")
+      // matchedForecastTime: API hourly.time[currentHourIndex] (örn. "2026-10-28 21:00")
+      const wTimeDisp = weatherModelTime || 'Zaman bilgisi bulunamadı';
+      const fTimeDisp = matchedForecastTime || 'Zaman bilgisi bulunamadı';
 
-      // Açıkça "anlık ölçüm" yerine "Model tahmini; zaman: [API_ZAMAN_DAMGASI]" şeklinde gösterilir
-      const lastUpdatedText = hasApiTime
-        ? `Model tahmini; zaman: ${apiTimeDisplay} (${apiTz})`
-        : 'Model zaman damgası doğrulanamadı (Zaman Yok)';
-
-      const nowFormatted = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      let lastUpdatedText = `Model Referans Zamanı: ${wTimeDisp} · Tahmin Zamanı: ${fTimeDisp} (${timezone})`;
+      if (marineModelTime && marineModelTime !== weatherModelTime) {
+        lastUpdatedText += ` · Deniz Modeli: ${marineModelTime}`;
+      }
 
       const liveResult: LiveConditionsData = {
         airTemp,
@@ -624,13 +675,28 @@ export async function fetchLiveMarineAndWeather(
         safetyAssessment,
         bestWindow: fallbackBaseline.bestWindow,
         sourceStatus: 'MODEL_OPEN_METEO',
-        modelTime: apiTimeDisplay,
-        fetchTime: nowFormatted,
+
+        weatherModelTime,
+        marineModelTime,
+        matchedForecastTime,
+        matchedMarineForecastTime,
+        timezone,
+
+        airTempTime: weatherModelTime,
+        windTime: weatherModelTime,
+        precipitationTime: weatherModelTime,
+        rainChanceTime,
+        waveTime,
+        waterTempTime,
+        currentTime,
+
+        modelTime: wTimeDisp,
+        fetchTime: wTimeDisp,
         lastUpdatedText,
         hourlyForecast,
         apiNotice: hasValidMarineData
           ? `Veriler Open-Meteo Forecast & Marine sayısal model çıktısıdır (İstek: ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E · Deniz Grid: ${marineData?.latitude?.toFixed(3)}°N, ${marineData?.longitude?.toFixed(3)}°E). Açık deniz sayısal hidrodinamik modelidir; kıyı dalga ölçüm şamandırası değildir.`
-          : `Atmosfer verileri Open-Meteo modelinden alınmıştır. Marine API dalga verisi eksiktir; dalga boyu rüzgârdan türetilmiş tahmindir, gerçek dalga ölçümü değildir.`
+          : `Atmosfer verileri Open-Meteo modelinden alınmıştır. Marine API dalga verisi eksiktir; dalga boyu tahmini yapılamamaktadır.`
       };
 
       memoryCache[cacheKey] = { data: liveResult, timestamp: now };
@@ -644,15 +710,14 @@ export async function fetchLiveMarineAndWeather(
     console.warn('Open-Meteo sayısal model çağrısı başarısız oldu, yerel referans model devrede:', error);
   }
 
-  // 3. API Başarısız Olduğunda: Sabit değerlerden gerçek zamanlı güvenlik skoru üretilmez!
+  // 3. API Başarısız Olduğunda: Sabit değerlerden gerçek zamanlı güvenlik skoru ve uydurma zaman üretilmez!
   const moon = calculateAstronomicalMoonPhase(new Date());
-  const nowFormatted = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const unavailableSafety = createUnavailableSafetyAssessment();
 
   const fallbackResult: LiveConditionsData = {
     airTemp: fallbackBaseline.airTemp,
     waterTemp: null,
-    waterTempNote: 'Veri alınamadı (API Yanıt Vermedi)',
+    waterTempNote: 'Zaman bilgisi bulunamadı (API Yanıt Vermedi)',
     rainChance: fallbackBaseline.rainChance,
     precipitationMm: 0,
     waveHeight: fallbackBaseline.waveHeight,
@@ -681,9 +746,24 @@ export async function fetchLiveMarineAndWeather(
     safetyAssessment: unavailableSafety,
     bestWindow: fallbackBaseline.bestWindow,
     sourceStatus: 'YEDEK_MODEL',
-    modelTime: 'Model Zamanı Yok',
+
+    weatherModelTime: null,
+    marineModelTime: null,
+    matchedForecastTime: null,
+    matchedMarineForecastTime: null,
+    timezone: 'Europe/Istanbul',
+
+    airTempTime: null,
+    windTime: null,
+    precipitationTime: null,
+    rainChanceTime: null,
+    waveTime: null,
+    waterTempTime: null,
+    currentTime: null,
+
+    modelTime: 'Zaman bilgisi bulunamadı',
     fetchTime: '--:--',
-    lastUpdatedText: 'Model zaman damgası yok (API Yanıt Vermedi · Referans Değer)',
+    lastUpdatedText: 'Zaman bilgisi bulunamadı (API Yanıt Vermedi · Referans Değer)',
     hourlyForecast: [], // Sahte tahmin puanı veya saat üretilmez!
     apiNotice: 'Canlı hava/deniz tahmin API bağlantısı sağlanamadı. Güncel veri yok — güvenlik değerlendirilemiyor. Gösterilen değerler referans veridir, güncel ölçüm değildir.'
   };
