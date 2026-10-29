@@ -16,6 +16,8 @@
  * - Çevrede kayıt bulunmaması yapının kesinlikle bulunmadığı anlamına gelmez; OSM üzerinde henüz haritalanmamış olabilir.
  */
 
+import { isLandPoint } from '../data/samsunOrduMapData';
+
 export interface CoastalFeature {
   id: string;
   osmId: string;
@@ -345,8 +347,9 @@ export async function assessCoastalAccessLive(
   distanceToCoastKm: number | null,
   zoneType: string
 ): Promise<CoastalAccessAssessment> {
-  // Karasal alan
-  if (zoneType === 'kara' || (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat < 41.2)) {
+  // Karasal alan: Coğrafi kara poligonu teyitli alan (zoneType 'kara' veya poligon içinde)
+  const isLand = zoneType === 'kara' || (zoneType !== 'deniz' && zoneType !== 'kiyi' && isLandPoint(lat, lng));
+  if (isLand) {
     return {
       queryLat: lat,
       queryLng: lng,
@@ -368,8 +371,9 @@ export async function assessCoastalAccessLive(
     };
   }
 
-  // Açık Deniz
-  if (zoneType === 'deniz' || (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat >= 41.2)) {
+  // Açık Deniz: Kıyı bandı dışındaki açık su alanı (zoneType 'deniz' veya kara poligonu dışı ve kıyıdan uzak)
+  const isSea = zoneType === 'deniz' || (!isLand && distanceToCoastKm !== null && distanceToCoastKm > 0.45);
+  if (isSea) {
     return {
       queryLat: lat,
       queryLng: lng,
@@ -508,7 +512,8 @@ export function assessCoastalAccess(
   distanceToCoastKm: number | null,
   zoneType: string
 ): CoastalAccessAssessment {
-  if (zoneType === 'kara' || (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat < 41.2)) {
+  const isLand = zoneType === 'kara' || (zoneType !== 'deniz' && zoneType !== 'kiyi' && isLandPoint(lat, lng));
+  if (isLand) {
     return {
       queryLat: lat,
       queryLng: lng,
@@ -530,7 +535,8 @@ export function assessCoastalAccess(
     };
   }
 
-  if (zoneType === 'deniz' || (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat >= 41.2)) {
+  const isSea = zoneType === 'deniz' || (!isLand && distanceToCoastKm !== null && distanceToCoastKm > 0.45);
+  if (isSea) {
     return {
       queryLat: lat,
       queryLng: lng,

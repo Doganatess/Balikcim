@@ -23,6 +23,8 @@
  * - Kıyıya yakın noktalarda dahi DTM ızgara sonucu yerel iskandil veya el iskandili ölçümü olarak sunulmaz.
  */
 
+import { isLandPoint } from '../data/samsunOrduMapData';
+
 export interface DataSourceMetadata {
   sourceName: string;
   sourceUrl: string;
@@ -76,8 +78,9 @@ function inferVerifiedSeabedSubstrate(
   confidence: 'Doğrulandı (Bölgesel Jeoloji Kaydı)' | 'Genel Coğrafi Çıkarım' | 'Doğrulanamadı (Veri Yok)';
   note: string;
 } {
-  // Karasal alan kontrolü
-  if (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat < 41.2) {
+  // Karasal alan kontrolü: Coğrafi kara poligonu testi
+  const isLand = isLandPoint(lat, lng);
+  if (isLand && (distanceToCoastKm === null || distanceToCoastKm > 0.45)) {
     return {
       substrate: 'Doğrulanmış Dip Verisi Yok',
       confidence: 'Doğrulanamadı (Veri Yok)',
@@ -234,7 +237,7 @@ export async function fetchBathymetry(
   const emodnetRes = await queryEmodnetBathymetry(lat, lng);
 
   const isNearshore = distanceToCoastKm !== null && distanceToCoastKm <= 0.45;
-  const isLandZone = zoneType === 'kara' || (distanceToCoastKm !== null && distanceToCoastKm > 0.45 && lat < 41.2);
+  const isLandZone = zoneType === 'kara' || (zoneType !== 'deniz' && zoneType !== 'kiyi' && isLandPoint(lat, lng));
 
   let depthMeters: number | null = null;
   let rawAvgElevationMeters: number | null = null;

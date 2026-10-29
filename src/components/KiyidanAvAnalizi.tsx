@@ -92,6 +92,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
   useEffect(() => {
     let isMounted = true;
     setIsLoadingBathy(true);
+    setBathymetry(null); // Önceki noktadan kalan batimetriyi temizle
 
     fetchBathymetry(coord.lat, coord.lng, geoAnalysis.distanceToCoastKm, geoAnalysis.zoneType)
       .then((res) => {
@@ -115,6 +116,8 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
   useEffect(() => {
     let isMounted = true;
     setIsLoadingOverpass(true);
+    // Eski tıklamadan kalan erişim değerlendirmesinin yeni koordinatı ezmesini engellemek için anında yeni senkron analizi yükle
+    setCoastalAccess(assessCoastalAccess(coord.lat, coord.lng, geoAnalysis.distanceToCoastKm, geoAnalysis.zoneType));
 
     assessCoastalAccessLive(coord.lat, coord.lng, geoAnalysis.distanceToCoastKm, geoAnalysis.zoneType)
       .then((res) => {
@@ -138,6 +141,7 @@ export const KiyidanAvAnalizi: React.FC<KiyidanAvAnaliziProps> = ({
   useEffect(() => {
     let isMounted = true;
     setIsLoadingObs(true);
+    setSpeciesObs(null); // Önceki koordinat gözlemini temizle
 
     querySpeciesObservations(selectedFish.latinName, coord.lat, coord.lng)
       .then((res) => {
